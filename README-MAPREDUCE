@@ -1,0 +1,7 @@
+MR-Tandem: MapReduce-enabled X!Tandem for Amazon Web Services (and others)
+
+The X!Tandem source code in the TPP can be built to operate on parallel systems including Amazon Web Services Elastic Map Reduce (AWS EMR), or any Hadoop cluster, and also to use MPI on AWS EC2 in the manner of the X!!Tandem project.  Insilicos maintains prebuilt binaries for this purpose in AWS S3.
+
+The scripts and documentation for launching MR-Tandem can be found in the "Insilicos Cloud Army" project on SourceForge at https://ica.svn.sourceforge.net/svnroot/ica/trunk .  
+
+
