@@ -1,0 +1,6 @@
+# ignore any exisiting subversion files
+*.svn
+
+# ignore build-related files
+*.o
+*.d
