@@ -184,8 +184,12 @@ The End
 #ifdef MSVC
 	#define __inline__ _inline
 	typedef _int64 __int64_t;
+    #if _MSC_VER >= 1600
+    #include <stdint.h>
+    #else
 	typedef unsigned long uint32_t;
 	typedef unsigned _int64 uint64_t;
+    #endif
 	#define snprintf _snprintf
 	// this define was made necessary in VC++ 2005 to avoid 
 	// unnecessary warnings associated with the new "secure" versions
