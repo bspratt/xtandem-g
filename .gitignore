@@ -4,3 +4,9 @@
 # ignore build-related files
 *.o
 *.d
+*.obj
+*.user
+*.bak
+Debug/*
+Profile/*
+Release/*
