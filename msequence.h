@@ -145,6 +145,13 @@ The End
  * NOTE: msequence.h has no corresponding .cpp file
  */
 
+
+
+// a single msequence object represents one protein entry (for
+// example, from a fasta file.)
+
+
+
 #include "mdomains.h"
 
 #ifdef HAVE_MULTINODE_TANDEM // support for Hadoop and/or MPI?

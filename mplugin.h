@@ -128,6 +128,24 @@ MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 The End 
 */
 
+
+							 
+// the only thing that *directly* descends from mplugin are mscore and
+// mrefine; however, mscore is the ancestory of plugable scores such
+// as mscore-k and are thus plugins.  All pluggable scores have
+// factories which descend from mpluginfactory.
+//
+// mplugin       mpluginfactory
+//   |                  |
+//   V                  V
+// mscore         custom score factories
+//   |
+//   V
+// custom (plugable) scores (mscore-k, etc)
+//
+
+
+
 #ifndef MPLUGIN_H
 #define MPLUGIN_H
 

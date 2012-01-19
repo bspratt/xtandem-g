@@ -143,6 +143,14 @@ The End
 	also contains the name of an output file, which will contain the output from the session.
 */
 
+
+
+// This file contains main().  It starts one mprocess object, uses it
+// to load settings and data, then (optionally) spins up additional
+// threads, setting each one to begin at mprocess::process.
+
+
+
 #include "stdafx.h"
 #include <sys/timeb.h>
 #include <ctime>

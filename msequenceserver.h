@@ -128,6 +128,14 @@ MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 The End 
 */
 
+
+
+// msequenceserver seems to be a class that returns proteins
+// (represented here by msequence objects), reading them as necessary
+// from fasta file(s).
+
+
+
 #ifndef MSEQUENCESERVER_H
 #define MSEQUENCESERVER_H
 
