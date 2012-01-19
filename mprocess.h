@@ -128,6 +128,37 @@ MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 The End 
 */
 
+
+
+// mprocess::process is the primary processing loop. there, after
+// config and data is loaded, a protein sequence server is used to
+// work with a starting sequence.  then the main scoring entry point
+// is mprocess::score_each_sequence.  This function, in turn, calls
+// mprocess::score, which operates on a single sequence and
+// "sequentially creates all possible cleavage peptides".  This
+// function does a single sequence score with mprocess::score_single.
+// score_single seems to be concerned with various missed cleavages
+// and possibily additional modificaitons here?
+
+// in score_single, eventually mprocess::create_score is called:
+
+// /*
+//  * create_score takes an msequence object and a start and an end sequence position
+//  * and saves that msequence, its mdomain and scoring in the spectrum that has just
+//  * been scored. equivalent msequence objects (based on their hyper score)
+//  * are stored sequentially in a vector in the mspectrum object
+//  */
+
+// finally mscore::score and ::hyper are called (via m_pScore
+// object)-- where finally, the actual dot product occurs.
+
+// mprocess:m_Pscore is a mscore object.  a score factory,
+// mscoremanager, which can return a mscore object of a specified
+// plugin type (i.e. "k-score") from xml params, is used when this
+// selection happens in mprocess::load
+
+
+
 #ifndef MPROCESS_H
 #define MPROCESS_H
 
