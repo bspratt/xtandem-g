@@ -1,0 +1,1 @@
+These are regression tests for the X!Tandem GPU work.  They don't assert correctness, just sameness.  To create a regression test just add "-t!" to the end of your xtandem-g commandline.  To run against that regression test add "-t" instead.

@@ -1,0 +1,5 @@
+<bioml label="x! taxon-to-file matching list">
+    <taxon label="toydatabase">
+    <file URL="ipi.toy.fasta" format="peptide" />
+  </taxon>
+  </bioml>
