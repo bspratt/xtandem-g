@@ -600,13 +600,15 @@ int main(int argc, char* argv[])
     // then InteractParser in test mode //
     //////////////////////////////////////
     if ((argc>2) && ! strncmp(argv[2],"-t",2)) { // match -t or -t!
-        if (!strncmp(argv[2],"-t!",3))
+        if (!strncmp(argv[2],"-t!",3)) {
             cout << "learning new regression test..." << endl;
-        else
+	}
+        else {
             cout << "performing regression test..." << endl;
-	    string strKey = "output, path";
-	    string strValue;
-	    pProcess[0]->m_xmlValues.get(strKey,strValue); // ex. strValue="foo.tandem"
+	}
+	string strKey = "output, path";
+	string strValue;
+	pProcess[0]->m_xmlValues.get(strKey,strValue); // ex. strValue="foo.tandem"
         // run Tandem2XML "foo.tandem" > "foo.tandem.pepXML"
         string cmd("Tandem2XML \"");
         cmd += strValue;
