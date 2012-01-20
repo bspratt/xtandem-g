@@ -121,6 +121,7 @@ class mscore_k : public mscore
 #endif // HAVE_MULTINODE_TANDEM
 protected:
     friend class mscorefactory_k;
+    friend class mscorefactory_kgpu; // in case mscore_kgpu has to fall back to non-GPU version
 
     mscore_k(void);    // Should only be created through mscorefactory_tandem
 

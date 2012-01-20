@@ -178,11 +178,15 @@ The End
 
 #ifdef __MINGW32__  // MinGW - GCC for win32, similar to MSVC build
 	#define MSVC
-	#define __inline__ inline
+    #ifndef __inline__
+    	#define __inline__ inline
+    #endif
 	#define __int64_t int64_t
 #else
 #ifdef MSVC
-	#define __inline__ _inline
+    #ifndef __inline__
+	    #define __inline__ _inline
+    #endif
 	typedef _int64 __int64_t;
     #if _MSC_VER >= 1600
     #include <stdint.h>
@@ -200,14 +204,18 @@ The End
 #endif // mingw
 
 #ifdef OSX
-	#define __inline__ inline
+    #ifndef __inline__
+    	#define __inline__ inline
+    #endif
 	#ifndef OSX_TIGER
 		#define __int64_t int64_t
 	#endif
 #endif
 // this define for the INTEL-based OSX platform is untested and may not work
 #ifdef OSX_INTEL
-	#define __inline__ inline
+    #ifndef __inline__
+    	#define __inline__ inline
+    #endif
 #endif
 // this define should work for most LINUX and UNIX platforms
 #ifdef GCC
