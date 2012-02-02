@@ -372,7 +372,7 @@ double mscore_c::dot(unsigned long *_v)
 
     vFloat& processed = m_vFloats[m_lId];
 
-    int size = processed.size();
+    int size = (int)processed.size();
 
     vmiType::iterator itFrag = m_vSeq.begin();
     vmiType::const_iterator itFragEnd = m_vSeq.end();
@@ -525,7 +525,7 @@ double mscore_c::dot_hr(unsigned long *_v)
 
   vmiType& processed = m_vmiType[m_lId];
 
-  int size = processed.size();
+  int size = (int)processed.size();
 	if (size<2){
 		_v=0;
 		return dScore;
@@ -549,7 +549,7 @@ double mscore_c::dot_hr(unsigned long *_v)
 
 	int i=1;
 	int iBin;
-	int iSeqSize=m_vSeq.size();
+	int iSeqSize=(int)m_vSeq.size();
 	
 	//perform a single pass through each array.
 	//check every point in m_pfSeq, but don't revisit positions in m_vmiType

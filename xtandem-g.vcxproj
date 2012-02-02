@@ -1,0 +1,304 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Profile|Win32">
+      <Configuration>Profile</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{BD027C4C-57BD-4B55-8CCE-462B517F0C1B}</ProjectGuid>
+    <RootNamespace>xtandem-g</RootNamespace>
+    <Keyword>Win32Proj</Keyword>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v100</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 4.1.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\src\tpp_common_release.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\src\tpp_common_release.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\src\tpp_common_debug.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.40219.1</_ProjectFileVersion>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</LinkIncremental>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</LinkIncremental>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'">false</LinkIncremental>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">xtandem-g</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'">xtandem-g</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">xtandem-g</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\extern\zlib123-dll;$(SolutionDir)..\extern\gzstream;$(SolutionDir)Parsers/ramp;$(CUDA_PATH)/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>XML_STATIC;MSVC;PLUGGABLE_SCORING;READ_GZIP;HAVE_ZLIB;HAVE_MULTINODE_TANDEM;HAVE_PWIZ_MZML_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+      <DisableSpecificWarnings>4996;4244;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <OutputFile>$(OutDir)xtandem-g.exe</OutputFile>
+      <AdditionalLibraryDirectories>$(CUDA_PATH)/lib/$(PlatformName);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <TargetMachine>MachineX86</TargetMachine>
+      <AdditionalDependencies>cudart.lib; cublas.lib; cuda.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PostBuildEvent>
+      <Message>copy xtandem config files</Message>
+      <Command>copy "$(SolutionDir)..\extern\xtandem\bin\tandem_params.xml" "$(OutDir)"
+copy "$(SolutionDir)..\extern\xtandem\bin\isb_default_input_kscore.xml" "$(OutDir)"
+copy "$(SolutionDir)..\extern\xtandem\bin\isb_default_input_native.xml" "$(OutDir)"
+copy "$(SolutionDir)..\extern\xtandem\bin\taxonomy.xml" "$(OutDir)"
+copy "$(SolutionDir)..\extern\xtandem\bin\tandem-style.xsl" "$(OutDir)"
+</Command>
+    </PostBuildEvent>
+    <CudaCompile>
+      <Defines>XML_STATIC;MSVC;PLUGGABLE_SCORING;READ_GZIP;HAVE_ZLIB;HAVE_MULTINODE_TANDEM;HAVE_PWIZ_MZML_LIB;%(PreprocessorDefinitions);%(Defines)</Defines>
+      <Include>$(SolutionDir)..\extern\zlib125-dll;$(SolutionDir)..\extern\gzstream;$(SolutionDir)..\extern\boost_1_45_0;$(SolutionDir)..\extern\ProteoWizard\pwiz;$(SolutionDir)Parsers/ramp;$(CUDA_PATH)/include;%(AdditionalIncludeDirectories);%(Include)</Include>
+      <Runtime>MTd</Runtime>
+    </CudaCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\extern\zlib123-dll;$(SolutionDir)..\extern\gzstream;$(SolutionDir)Parsers/ramp;$(CUDA_PATH)/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>XML_STATIC;MSVC;PLUGGABLE_SCORING;READ_GZIP;HAVE_ZLIB;HAVE_MULTINODE_TANDEM;HAVE_PWIZ_MZML_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <DisableSpecificWarnings>4996;4244;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <OutputFile>$(OutDir)xtandem-g.exe</OutputFile>
+      <AdditionalLibraryDirectories>$(CUDA_PATH)/lib/$(PlatformName);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <TargetMachine>MachineX86</TargetMachine>
+      <AdditionalDependencies>cudart.lib; cublas.lib; cuda.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PostBuildEvent>
+      <Message>copy xtandem config files</Message>
+      <Command>copy "$(SolutionDir)..\extern\xtandem\bin\tandem_params.xml" "$(OutDir)"
+copy "$(SolutionDir)..\extern\xtandem\bin\isb_default_input_kscore.xml" "$(OutDir)"
+copy "$(SolutionDir)..\extern\xtandem\bin\isb_default_input_native.xml" "$(OutDir)"
+copy "$(SolutionDir)..\extern\xtandem\bin\taxonomy.xml" "$(OutDir)"
+copy "$(SolutionDir)..\extern\xtandem\bin\tandem-style.xsl" "$(OutDir)"
+</Command>
+    </PostBuildEvent>
+    <CudaCompile>
+      <Defines>XML_STATIC;MSVC;PLUGGABLE_SCORING;READ_GZIP;HAVE_ZLIB;HAVE_MULTINODE_TANDEM;HAVE_PWIZ_MZML_LIB;%(PreprocessorDefinitions)</Defines>
+      <Include>$(SolutionDir)..\extern\zlib125-dll;$(SolutionDir)..\extern\gzstream;$(SolutionDir)..\extern\boost_1_45_0;$(SolutionDir)..\extern\ProteoWizard\pwiz;$(SolutionDir)Parsers/ramp;$(CUDA_PATH)/include;%(AdditionalIncludeDirectories);%(Include)</Include>
+      <Runtime>MT</Runtime>
+    </CudaCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\extern\zlib123-dll;$(SolutionDir)..\extern\gzstream;$(SolutionDir)Parsers/ramp;$(CUDA_PATH)/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>XML_STATIC;MSVC;PLUGGABLE_SCORING;READ_GZIP;HAVE_ZLIB;HAVE_MULTINODE_TANDEM;HAVE_PWIZ_MZML_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4996;4244;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <OutputFile>$(OutDir)xtandem-g.exe</OutputFile>
+      <AdditionalLibraryDirectories>$(CUDA_PATH)/lib/$(PlatformName);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <TargetMachine>MachineX86</TargetMachine>
+      <AdditionalDependencies>cudart.lib; cublas.lib; cuda.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <PostBuildEvent>
+      <Message>copy xtandem config files</Message>
+      <Command>copy "$(SolutionDir)..\extern\xtandem\bin\tandem_params.xml" "$(OutDir)"
+copy "$(SolutionDir)..\extern\xtandem\bin\isb_default_input_kscore.xml" "$(OutDir)"
+copy "$(SolutionDir)..\extern\xtandem\bin\isb_default_input_native.xml" "$(OutDir)"
+copy "$(SolutionDir)..\extern\xtandem\bin\taxonomy.xml" "$(OutDir)"
+copy "$(SolutionDir)..\extern\xtandem\bin\tandem-style.xsl" "$(OutDir)"
+</Command>
+    </PostBuildEvent>
+    <CudaCompile>
+      <Defines>XML_STATIC;MSVC;PLUGGABLE_SCORING;READ_GZIP;HAVE_ZLIB;HAVE_MULTINODE_TANDEM;HAVE_PWIZ_MZML_LIB;%(PreprocessorDefinitions)</Defines>
+      <Include>$(SolutionDir)..\extern\zlib125-dll;$(SolutionDir)..\extern\gzstream;$(SolutionDir)..\extern\boost_1_45_0;$(SolutionDir)..\extern\ProteoWizard\pwiz;$(SolutionDir)Parsers/ramp;$(CUDA_PATH)/include;%(AdditionalIncludeDirectories);%(Include)</Include>
+      <Runtime>MT</Runtime>
+    </CudaCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="base64.cpp" />
+    <ClCompile Include="loadmspectrum.cpp" />
+    <ClCompile Include="mapreducehandler.cpp" />
+    <ClCompile Include="mapreducehelper.cpp" />
+    <ClCompile Include="mapreducehelper_bangbang.cpp" />
+    <ClCompile Include="masscalc.cpp" />
+    <ClCompile Include="mbiomlreport.cpp" />
+    <ClCompile Include="mpam.cpp" />
+    <ClCompile Include="mplugin.cpp" />
+    <ClCompile Include="mpmods.cpp" />
+    <ClCompile Include="mprocess.cpp" />
+    <ClCompile Include="mrefine.cpp" />
+    <ClCompile Include="mreport.cpp" />
+    <ClCompile Include="mscore.cpp" />
+    <ClCompile Include="mscore_c.cpp" />
+    <ClCompile Include="mscore_hrk.cpp" />
+    <ClCompile Include="mscore_k.cpp" />
+    <ClCompile Include="mscore_kgpu.cpp" />
+    <ClCompile Include="mscore_tandem.cpp" />
+    <ClCompile Include="msequencecollection.cpp" />
+    <ClCompile Include="msequenceserver.cpp" />
+    <ClCompile Include="msequtilities.cpp" />
+    <ClCompile Include="mspectrumcondition.cpp" />
+    <ClCompile Include="mtermmods.cpp" />
+    <ClCompile Include="mxxcleavage.cpp" />
+    <ClCompile Include="p3.cpp" />
+    <ClCompile Include="p3mprocess.cpp" />
+    <ClCompile Include="p3msequenceserver.cpp" />
+    <ClCompile Include="saxbiomlhandler.cpp" />
+    <ClCompile Include="saxgamlhandler.cpp" />
+    <ClCompile Include="saxhandler.cpp" />
+    <ClCompile Include="saxmodhandler.cpp" />
+    <ClCompile Include="saxmzdatahandler.cpp" />
+    <ClCompile Include="saxmzxmlhandler.cpp" />
+    <ClCompile Include="saxsaphandler.cpp" />
+    <ClCompile Include="saxtandeminputhandler.cpp" />
+    <ClCompile Include="saxtaxhandler.cpp" />
+    <ClCompile Include="serialize.cpp" />
+    <ClCompile Include="stdafx.cpp" />
+    <ClCompile Include="tandem.cpp" />
+    <ClCompile Include="timer.cpp" />
+    <ClCompile Include="xmlparameter.cpp" />
+    <ClCompile Include="xmltaxonomy.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="base64.h" />
+    <ClInclude Include="expat.h" />
+    <ClInclude Include="expat_external.h" />
+    <ClInclude Include="expat_external_old.h" />
+    <ClInclude Include="expat_old.h" />
+    <ClInclude Include="loadmspectrum.h" />
+    <ClInclude Include="mapreducehelper.h" />
+    <ClInclude Include="masscalc.h" />
+    <ClInclude Include="mbiomlreport.h" />
+    <ClInclude Include="mcleave.h" />
+    <ClInclude Include="mdomains.h" />
+    <ClInclude Include="mhistogram.h" />
+    <ClInclude Include="mmotif.h" />
+    <ClInclude Include="mpam.h" />
+    <ClInclude Include="mplugin.h" />
+    <ClInclude Include="mpmods.h" />
+    <ClInclude Include="mprocess.h" />
+    <ClInclude Include="mrefine.h" />
+    <ClInclude Include="mreport.h" />
+    <ClInclude Include="mscore.h" />
+    <ClInclude Include="mscore_c.h" />
+    <ClInclude Include="mscore_hrk.h" />
+    <ClInclude Include="mscore_k.h" />
+    <ClInclude Include="mscore_kgpu.h" />
+    <ClInclude Include="mscore_kgpu_thrust.h" />
+    <ClInclude Include="mscore_tandem.h" />
+    <ClInclude Include="mscorepam.h" />
+    <ClInclude Include="mscorestate.h" />
+    <ClInclude Include="msemistate.h" />
+    <ClInclude Include="msequence.h" />
+    <ClInclude Include="msequencecollection.h" />
+    <ClInclude Include="msequenceserver.h" />
+    <ClInclude Include="msequtilities.h" />
+    <ClInclude Include="mspectrum.h" />
+    <ClInclude Include="mspectrumcondition.h" />
+    <ClInclude Include="mtermmods.h" />
+    <ClInclude Include="mxxcleavage.h" />
+    <ClInclude Include="p3mprocess.h" />
+    <ClInclude Include="p3msequenceserver.h" />
+    <ClInclude Include="saxbiomlhandler.h" />
+    <ClInclude Include="saxgamlhandler.h" />
+    <ClInclude Include="saxhandler.h" />
+    <ClInclude Include="saxmodhandler.h" />
+    <ClInclude Include="saxmzdatahandler.h" />
+    <ClInclude Include="saxmzxmlhandler.h" />
+    <ClInclude Include="saxsaphandler.h" />
+    <ClInclude Include="saxtandeminputhandler.h" />
+    <ClInclude Include="saxtaxhandler.h" />
+    <ClInclude Include="serialize.h" />
+    <ClInclude Include="stdafx.h" />
+    <ClInclude Include="timer.h" />
+    <ClInclude Include="xmlparameter.h" />
+    <ClInclude Include="xmltaxonomy.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\tpplib\tpplib.vcxproj">
+      <Project>{e0aac1af-6a80-4446-935a-3b54797e720f}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\..\expat.vcxproj">
+      <Project>{7d9bb5ab-ab4f-4d56-8113-35357ead1e34}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\..\gzstream\gzstream.vcxproj">
+      <Project>{1c28178c-d185-4a4f-baee-e5d9850ac84e}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="mscore_kgpu_thrust.cu" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 4.1.targets" />
+  </ImportGroup>
+</Project>

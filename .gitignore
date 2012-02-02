@@ -10,3 +10,6 @@
 Debug/*
 Profile/*
 Release/*
+DebugVC10/*
+ProfileVC10/*
+ReleaseVC10/*

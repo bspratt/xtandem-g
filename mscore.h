@@ -336,8 +336,8 @@ public:
 };
 
 typedef vector<MIType> vmiType;
-#ifdef HAVE_MULTINODE_TANDEM  // autoserialize fails for vector of vectors
 class vectorvmiType : public vector<vmiType> {
+#ifdef HAVE_MULTINODE_TANDEM  // autoserialize fails for vector of vectors
   friend class boost::serialization::access;
   template<class Archive>
   void serialize(Archive &ar, const unsigned int version)
@@ -352,10 +352,8 @@ class vectorvmiType : public vector<vmiType> {
 			ar & (*this)[s];
 		}
     }
-};
-#else
-typedef vectorvmiType vector<vmiType>;
 #endif
+};
 
 class mspec
 {

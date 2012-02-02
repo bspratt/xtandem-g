@@ -27,6 +27,7 @@
 #include "msequtilities.h"
 #include "xmlparameter.h"
 #include "mscore_k.h" // we want to be like k-score, but faster
+#include "mscore_kgpu_thrust.h" // stuff that gets compiled by NVCC
 
 class mscore_kgpu : public mscore_k
 {
@@ -35,11 +36,7 @@ class mscore_kgpu : public mscore_k
   template<class Archive>
   void serialize(Archive &ar, const unsigned int version)
     {
-      ar & boost::serialization::base_object<mscore>(*this);
-      ar & m_maxEnd;
-      ar & m_miUsed;
-      ar & m_vmiType;
-      ar & m_dIsotopeCorrection;
+      ar & boost::serialization::base_object<mscore_k>(*this);
     }
 #endif // HAVE_MULTINODE_TANDEM
 protected:
@@ -47,39 +44,17 @@ protected:
 
     mscore_kgpu(void);    // Should only be created through mscorefactory_tandem
 
+    thrust::device_vector<float> *m_miUsed; // intensities of used masses
+    std::vector<vmiTypeGPU> m_vmiTypeGPU; // processed intensity-m/z pairs
+
 public:
     virtual ~mscore_kgpu(void);
 
-public:
-    virtual bool load_param(XmlParameter &_x); // allows score object to issue warnings,
-                                               // or set variables based on xml
-    virtual bool precondition(mspectrum &_s); // called before spectrum conditioning
-    virtual void prescore(const size_t _i); // called before scoring
-    
-    virtual bool add_mi(mspectrum &_s);
-
-    virtual double sfactor(); // factor applied to final convolution score
-    virtual unsigned long mconvert(double _m, const long _c); // convert mass to integer ion m/z for mi vector
-    virtual void report_score(char* _buff, float _h); // format hyper score for output
-
-    virtual bool clear();
-
-protected:
+public: // inherit anything we don't cuda-ize
+    virtual void prescore(const size_t _i);
     virtual double dot(unsigned long *_v); // this is where the real scoring happens
-
-protected:
-    unsigned long imass(double _m)
-    {
-        return (unsigned long)((_m/m_dIsotopeCorrection) + 0.5);
-    }
-
-protected:
-    int m_maxEnd;
-    miLookup m_miUsed;
-    vectorvmiType m_vmiType;
-		vector<int> m_vmiUsed;
-
-    double m_dIsotopeCorrection;
+    virtual bool add_mi(mspectrum &_s);
+    virtual bool clear();
 };
 
 /*

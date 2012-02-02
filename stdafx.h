@@ -245,6 +245,7 @@ The End
 
 // common includes for the standard template library
 
+#ifndef __CUDA_ARCH__ // keep it simple for nvcc
 #ifdef READ_GZIP
 #include "gzstream.h"
 #define ifstream igzstream
@@ -256,6 +257,7 @@ The End
 #define fgets(buf,len,file) gzgets(file,buf,len)
 #else
 #define ogzstream ofstream
+#endif
 #endif
 
 #include <string>

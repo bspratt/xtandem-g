@@ -624,7 +624,7 @@ int main(int argc, char* argv[])
         pepxml += ".pepXML\"";
         cmd += pepxml;
         cout << cmd << endl;
-        system(cmd.c_str());
+        int err = system(cmd.c_str());
         // run InteractParser -t[!]"foo.tandem.test" "foo.tandem.interact.pepXML" "foo.tandem.pepXML" 
         cmd = "InteractParser ";
 	cmd = builddir + cmd;  // build directory prefix
@@ -636,7 +636,9 @@ int main(int argc, char* argv[])
         cmd += ".interact.pepXML\" \"";
         cmd += pepxml;
         cout << cmd << endl;
-        system(cmd.c_str());
+        err |= system(cmd.c_str());
+        if (err)
+            return err;
     }
     ///////////////////////////////// 
 
