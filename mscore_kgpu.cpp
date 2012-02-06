@@ -185,7 +185,6 @@ void mscore_kgpu::prescore(const size_t _i)
  * needed for modeling, as all of the work associated with a spectrum
  * is only done once, prior to modeling sequences.
  */
-static int foo=0;  // TODO killme
 bool mscore_kgpu::add_mi(mspectrum &_s)
 {
     if (!mscore::add_mi(_s))
