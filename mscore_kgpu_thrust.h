@@ -22,13 +22,33 @@
 
 
 // using CUDA Thrust template lib
+#include <cuda.h>
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
+#include <thrust/experimental/cuda/pinned_allocator.h> 
+
+#include "mspectrum.h"
+
+typedef thrust::host_vector<float,thrust::experimental::cuda::pinned_allocator<float>> pinned_host_vector_float_t;
+typedef thrust::host_vector<int,thrust::experimental::cuda::pinned_allocator<int>> pinned_host_vector_int_t;
+
+
+class cudatimer {public: cudaEvent_t start;cudaEvent_t stop;float elapsed; float count; cudatimer():elapsed(0),count(0){}};
+
+#if 0
+#define CUDA_TIMER_START(tvar)
+#define CUDA_TIMER_STOP(tvar) 
+#else
+#define CUDA_TIMER_START(tvar) cudaEventCreate(&tvar.start); cudaEventCreate(&tvar.stop); cudaEventRecord( tvar.start, 0 );
+#define CUDA_TIMER_STOP(tvar) cudaEventRecord( tvar.stop, 0 ); cudaEventSynchronize( tvar.stop ); {float t;cudaEventElapsedTime( &t, tvar.start, tvar.stop ); tvar.elapsed+=t;}std::cout << "t("<<#tvar<<")="<<tvar.elapsed/(++tvar.count)<<"ms avg\n";cudaEventDestroy( tvar.start ); cudaEventDestroy( tvar.stop );
+#endif
 
 // helpers for hiding device memory implementation from normal C++
 thrust::device_vector<float> *mscore_kgpu_thrust_fvec_alloc(int size);
 void mscore_kgpu_thrust_fvec_clear(thrust::device_vector<float> *vec);
 void mscore_kgpu_thrust_fvec_kill(thrust::device_vector<float> *vec);
+void mscore_kgpu_thrust_ivec_kill(thrust::device_vector<int> *vec);
+thrust::device_vector<int> *mscore_kgpu_thrust_device_copy(pinned_host_vector_int_t &h);
 
 struct vmiTypeGPU {
     // purposefully crude, don't want lots of automatic create destroy copy in std::vector
@@ -39,8 +59,12 @@ public:
     void kill();
 };
 
-void mscore_kgpu_thrust_score(thrust::host_vector<float> const &host_fI, // intensities (input)
-    thrust::host_vector<float> const &host_fM, // m/z's (input)
+void mscore_kgpu_thrust_score(
+    // m/z-intensity pairs (input)
+    const thrust::device_vector<float> &fM,
+    const thrust::device_vector<float> &fI,    
+    size_t start, // start reading here
+    size_t end, // and end reading here
     double dIsotopeCorrection, // for m/z binning (input)
     int iWindowCount, // (input)
     int endMassMax, // max acceptable binned m/z (input)
@@ -54,8 +78,10 @@ void mscore_kgpu_thrust_score(thrust::host_vector<float> const &host_fI, // inte
  * number in the m_vsmapMI vector. the sequence is represented by the values
  * that are currently held in m_plSeq (integer masses).
  */
-float mscore_kgpu_thrust_dot(unsigned long &lCount,const vmiTypeGPU &_vmiTypeGPU,
-    unsigned long const *_plSeq, thrust::device_vector<float> &_miUsed);
+float mscore_kgpu_thrust_dot(unsigned long &lCount,
+    const vmiTypeGPU &_spectrum,
+    thrust::device_vector<int> *seq, int seqstart, int seqend,
+    thrust::device_vector<float> &_miUsed) ;
 
 #endif // MSCORE_KGPU_THRUST_H
 

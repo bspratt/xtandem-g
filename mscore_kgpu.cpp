@@ -24,6 +24,7 @@
 
 // using CUDA Thrust template lib
 #include "mscore_kgpu_thrust.h"
+#include <thrust/experimental/cuda/pinned_allocator.h> 
 
 // Factory instance, registers itself with the mscoremanager.
 static mscorefactory_kgpu factory;
@@ -143,7 +144,7 @@ mplugin* mscorefactory_kgpu::create_plugin()
     return new mscore_kgpu();
 }
 
-mscore_kgpu::mscore_kgpu(void) : mscore_k(), m_miUsed(NULL)
+mscore_kgpu::mscore_kgpu(void) : mscore_k(), m_miUsed(NULL), m_preloading(false), m_cached_sequences_i(NULL)
 {
 }
 
@@ -151,16 +152,26 @@ mscore_kgpu::~mscore_kgpu(void)
 {
     clear();
     mscore_kgpu_thrust_fvec_kill(m_miUsed);
+    
 }
 
 bool mscore_kgpu::clear()
 {
-    mscore_k::clear();
+    bool ret = mscore_k::clear();
     for (int n=m_vmiTypeGPU.size();n--;) {
         m_vmiTypeGPU[n].kill();
     }
     m_vmiTypeGPU.resize(0);
-    return true;
+    clear_sequence_cache();
+    return ret;
+}
+
+void mscore_kgpu::clear_sequence_cache() {
+    mscore_kgpu_thrust_ivec_kill(m_cached_sequences_i);
+    m_cached_sequences_i = NULL;
+    m_cached_sequences_l.resize(0);
+    m_cached_sequences_f.resize(0);
+    m_cached_sequences_index.resize(0);
 }
 
 /*
@@ -169,14 +180,111 @@ bool mscore_kgpu::clear()
  */
 void mscore_kgpu::prescore(const size_t _i)
 {
-    mscore::prescore(_i);
+    mscore_k::prescore(_i);
+    if (m_preloading) {  // avoid infinite recursion
+        return;
+    }
 
     // Initialize of clear the used intensity look-up.
     if (m_miUsed == NULL)
         m_miUsed = mscore_kgpu_thrust_fvec_alloc(m_maxEnd);
     else
         mscore_kgpu_thrust_fvec_clear(m_miUsed);
+    clear_sequence_cache();
+
+    // preprocess data for dot() - runs
+    // mscore::score, without the calls to dot()
+    m_vSpectra.clear();
+    m_preloading = true;
+    score(_i); // runs through gathering sequences without performing dot()
+    m_preloading = false;
+    m_current_playback_sequence = 0;
+    //  convert to in and push to device memory
+    pinned_host_vector_int_t cached_sequences_h(m_cached_sequences_l.size());
+    pinned_host_vector_int_t::iterator cs = cached_sequences_h.begin();
+    for (std::vector<long>::iterator it = m_cached_sequences_l.begin(); it != m_cached_sequences_l.end();) {
+        *cs++ = *it++;
+    }
+    m_cached_sequences_i = mscore_kgpu_thrust_device_copy(cached_sequences_h);
 }
+
+bool mscore_kgpu::load_seq(const unsigned long _t,const long _c) {
+    if (m_preloading) {
+        bool ret = mscore_k::load_seq(_t,_c); // get it
+        cache_sequence();
+        return ret;
+    } else {
+        return playback_sequence();
+    }
+}
+
+void mscore_kgpu::cache_sequence() {
+    // jam sequence info into contiguous memory for cheap transfer to device
+    int seqlen;
+    for (seqlen=0 ; m_plSeq[seqlen]; seqlen++); // get length of new sequence
+    int prev_end=m_cached_sequences_l.size(); // note end of list
+    m_cached_sequences_index.push_back(prev_end); // note where to find new sequence
+    m_cached_sequences_f.resize(m_cached_sequences_f.size()+seqlen+1);
+    memmove(&m_cached_sequences_f[prev_end],this->m_pfSeq,(seqlen+1)*sizeof(float));
+    m_cached_sequences_l.resize(m_cached_sequences_l.size()+seqlen+1);
+    memmove(&m_cached_sequences_l[prev_end],this->m_plSeq,(seqlen+1)*sizeof(long));
+}
+
+bool mscore_kgpu::playback_sequence() {
+    m_current_playback_sequence_begin = m_cached_sequences_index[m_current_playback_sequence++];
+    m_current_playback_sequence_end = (m_current_playback_sequence==m_cached_sequences_index.size())?
+        m_cached_sequences_l.size():
+        m_cached_sequences_index[m_current_playback_sequence];
+    memmove(m_pfSeq,&m_cached_sequences_f[m_current_playback_sequence_begin],(m_current_playback_sequence_end-m_current_playback_sequence_begin)*sizeof(float));
+    memmove(m_plSeq,&m_cached_sequences_l[m_current_playback_sequence_begin],(m_current_playback_sequence_end-m_current_playback_sequence_begin)*sizeof(long));
+    return true;
+}
+
+bool mscore_kgpu::add_A(const unsigned long _t,const long _c) {
+    if (m_preloading) {
+        return mscore_k::add_A(_t,_c); // get it
+    }
+    return true;
+}
+bool mscore_kgpu::add_B(const unsigned long _t,const long _c) {
+    if (m_preloading) {
+        return mscore_k::add_B(_t,_c); // get it
+    }
+    return true;
+}
+bool mscore_kgpu::add_C(const unsigned long _t,const long _c) {
+    if (m_preloading) {
+        return mscore_k::add_C(_t,_c); // get it
+    }
+    return true;
+}
+bool mscore_kgpu::add_Y(const unsigned long _t,const long _c) {
+    if (m_preloading) {
+        bool ret = mscore_k::add_Y(_t,_c); // get it
+        if (!_t) { // direct call   
+            cache_sequence();
+        }
+        return ret;
+    } else {
+         if (!_t) { // direct call
+            playback_sequence();
+         }
+    }
+    return true;
+}
+bool mscore_kgpu::add_X(const unsigned long _t,const long _c) {
+    if (m_preloading) {
+        return mscore_k::add_X(_t,_c); // get it
+    }
+    return true;
+}
+bool mscore_kgpu::add_Z(const unsigned long _t,const long _c) {
+    if (m_preloading) {
+        return mscore_k::add_Z(_t,_c); // get it
+    }
+    return true;
+}
+
 
 /*
  * add_mi does the work necessary to set up an mspectrum object for modeling. 
@@ -190,31 +298,55 @@ bool mscore_kgpu::add_mi(mspectrum &_s)
     if (!mscore::add_mi(_s))
         return false;
 
-    vmiTypeGPU vTypeGPU;
-    vTypeGPU.init(_s.m_vMI.size());
-    if (_s.m_vMI.size() != 0)
-    {
-        // CUDA works better on arrays than structs, lay these out
-        thrust::host_vector<float> hfI; // intensities
-        thrust::host_vector<float> hfM; // m/z's
-        hfI.resize( _s.m_vMI.size());
-        hfM.resize( _s.m_vMI.size());
-        for (int n=_s.m_vMI.size();n--;) {
-            hfI[n] = _s.m_vMI[n].m_fI;
-            hfM[n] = _s.m_vMI[n].m_fM;
+    if (&_s == m_vSpectra.back()) { // last in list, transfer all to device memory in one go
+cudatimer mi_time;CUDA_TIMER_START(mi_time);
+        size_t a, n_pairs=0;
+        for (a=0;a < m_vSpectra.size();a++)	{
+            n_pairs += m_vSpectra[a]->m_vMI.size();
         }
-        // Screen peeks on upper end.
-        int iWindowCount = 10;
-        int endMassMax = (int)(((_s.m_dMH + (_s.m_fZ - 1) * m_seqUtil.m_dProton) / _s.m_fZ) * 2.0 + 0.5) + iWindowCount;
+        pinned_host_vector_float_t fM(n_pairs);
+        pinned_host_vector_float_t fI(n_pairs);
+        n_pairs = 0;
+        for (a=0;a < m_vSpectra.size();a++)	{
+            for (size_t n=0;n<m_vSpectra[a]->m_vMI.size();n++) {
+                fI[n_pairs]   = m_vSpectra[a]->m_vMI[n].m_fI;
+                fM[n_pairs++] = m_vSpectra[a]->m_vMI[n].m_fM;
+            }
+        }
+        // now copy to memory
+        thrust::device_vector<float> dfM(fM);
+        thrust::device_vector<float> dfI(fI);
 
-        // now pass off to CUDA implementation
-        mscore_kgpu_thrust_score(hfI,hfM,m_dIsotopeCorrection,iWindowCount,endMassMax,m_maxEnd,vTypeGPU); // results come back in vTypeGPU
+        // and actually do the add_mi logic
+        n_pairs = 0;
+        for (a=0;a < m_vSpectra.size();a++)	{
+            mspectrum &_s = *m_vSpectra[a];
+            vmiTypeGPU vTypeGPU;
+            vTypeGPU.init(_s.m_vMI.size());
+            if (_s.m_vMI.size() != 0)
+            {
+               // Screen peeks on upper end.
+                int iWindowCount = 10;
+                int endMassMax = (int)(((_s.m_dMH + (_s.m_fZ - 1) * m_seqUtil.m_dProton) / _s.m_fZ) * 2.0 + 0.5) + iWindowCount;
+
+                // now pass off to CUDA implementation
+                mscore_kgpu_thrust_score(dfM,dfI,n_pairs,n_pairs+_s.m_vMI.size(),m_dIsotopeCorrection,iWindowCount,endMassMax,m_maxEnd,vTypeGPU); // results come back in vTypeGPU
+            }
+            m_vmiTypeGPU.push_back(vTypeGPU);
+            n_pairs += _s.m_vMI.size();
+        }
+CUDA_TIMER_STOP(mi_time)
     }
-    m_vmiTypeGPU.push_back(vTypeGPU);
     return true;
 
 }
 
+bool mscore_kgpu::add_details(mspectrum &_s)
+{
+    bool ret = mscore::add_details(_s); // do the base work
+    m_vSpectra.push_back(&_s); // note who we'll be working on
+    return ret;
+}
 
 /*
  * dot is the fundamental logic for scoring a peptide with a mass spectrum.
@@ -224,6 +356,10 @@ bool mscore_kgpu::add_mi(mspectrum &_s)
  */
 double mscore_kgpu::dot(unsigned long *_v)
 {
-    return mscore_kgpu_thrust_dot(*_v,m_vmiTypeGPU[m_lId],m_plSeq,*m_miUsed);
+    if (m_preloading) {
+        return 1.0;  // not yet, still loading spectra
+    } else {
+        return mscore_kgpu_thrust_dot(*_v,m_vmiTypeGPU[m_lId],m_cached_sequences_i, m_current_playback_sequence_begin, m_current_playback_sequence_end,*m_miUsed);
+    }
 }
 

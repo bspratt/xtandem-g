@@ -19,8 +19,6 @@
 
 #include <iostream>
 #include <sstream>
-
-#include "mscore_kgpu_thrust.h"
 #include <cuda.h>
 #include <device_functions.h>
 #include <thrust/functional.h>
@@ -31,6 +29,14 @@
 #include <thrust/unique.h>
 #include <thrust/scan.h>
 #include <thrust/binary_search.h>
+#include <map>
+
+#ifdef HAVE_MULTINODE_TANDEM // support for Hadoop and/or MPI?
+#undef HAVE_MULTINODE_TANDEM // need to omit boost etc for NVCC's benefit
+#endif
+using namespace std; // this is evil but tandem codebase assumes
+typedef map<unsigned long,double> SMap;
+#include "mscore_kgpu_thrust.h"
 
 typedef thrust::device_vector<float> fvec;
 typedef thrust::device_vector<int> ivec;
@@ -57,6 +63,15 @@ void mscore_kgpu_thrust_fvec_clear(thrust::device_vector<float> *vec) {
 }
 void mscore_kgpu_thrust_fvec_kill(thrust::device_vector<float> *vec) {
     delete vec;
+}
+
+void mscore_kgpu_thrust_ivec_kill(thrust::device_vector<int> *vec) {
+    delete vec;
+}
+
+thrust::device_vector<int> *mscore_kgpu_thrust_device_copy(pinned_host_vector_int_t &h) {
+    thrust::device_vector<int> *ret = new thrust::device_vector<int>(h);
+    return ret;
 }
 
 
@@ -119,7 +134,7 @@ struct imass_functor
     m_IsotopeCorrection((float)(1.0/IsotopeCorrection)),m_binOffset(binOffset) {}
     template <typename Tuple>
     __host__ __device__
-        void operator()(Tuple m)
+        void operator()(Tuple m) // 0=raw mz 1=binned mz
     {
         thrust::get<1>(m) =  ((int)((thrust::get<0>(m)*m_IsotopeCorrection) + 0.5f))-m_binOffset;
     }
@@ -179,34 +194,35 @@ struct squareroot
     }
 };
 
-void mscore_kgpu_thrust_score(thrust::host_vector<float> const &host_fI, // intensities (input)
-    thrust::host_vector<float> const &host_fM, // m/z's (input)
+void mscore_kgpu_thrust_score(
+    // m/z-intensity pairs of all spectra in one big array (input)
+    const thrust::device_vector<float> &allfM,
+    const thrust::device_vector<float> &allfI,    
+    size_t start, // start reading here
+    size_t end, // and end reading here
     double dIsotopeCorrection, // for m/z binning (input)
     int iWindowCount, // (input)
     int endMassMax, // max acceptable binned m/z (input)
     int &m_maxEnd,  // max encountered binned m/z (output)
     vmiTypeGPU &binned)   // binned intensities and m/z's (output)
 {
-    if (!host_fM.size()) {
+    if (!(end-start)) {
         return;
     }
     thrust::device_vector<int> &iM = *binned.iM;
     thrust::device_vector<float> &fI = *binned.fI;
+    thrust::copy_n(allfI.begin()+start,(end-start),fI.begin());
 
     // figure the shift needed for lowest binned mass and half smoothing window
-    int startMass = (int)((host_fM[0]*dIsotopeCorrection) + 0.5f);
+    int startMass = (int)((allfM[start]*dIsotopeCorrection) + 0.5f);
     const int binOffset = startMass-50;
     endMassMax -= binOffset; // shift to local coords
     startMass -= binOffset;
 
     // bin the m/z's
-    iM.resize(host_fM.size());
-    {
-    fvec fM(host_fM); // copy to device memory
-    thrust::for_each(thrust::make_zip_iterator(thrust::make_tuple(fM.begin(), iM.begin())), 
-                     thrust::make_zip_iterator(thrust::make_tuple(fM.end(), iM.end())), 
+    thrust::for_each(thrust::make_zip_iterator(thrust::make_tuple(allfM.begin()+start, iM.begin())), 
+                     thrust::make_zip_iterator(thrust::make_tuple(allfM.begin()+end, iM.end())), 
                      imass_functor(dIsotopeCorrection,binOffset));
-    }
 
     // Screen peeks on upper end.  TODO faster way?
     iveciter itM = iM.begin();
@@ -225,7 +241,6 @@ void mscore_kgpu_thrust_score(thrust::host_vector<float> const &host_fI, // inte
     }
 
     // if any bin has more than one occupant, choose the one with higher intensity
-    fI = host_fI; // copy to device memory
     thrust::for_each(thrust::make_zip_iterator(thrust::make_tuple(itM, itM+1, fI.begin(), fI.begin()+1)), 
                      thrust::make_zip_iterator(thrust::make_tuple(itEnd-1, itEnd, fI.end()-(trimEnd+1), fI.end()-trimEnd)), 
                      imass_collision_functor());
@@ -369,46 +384,50 @@ struct add_B_to_A_functor
 
 // helpful macro for copying to c++ space for debugger viewing
 #define STDVECT(T,foo,seq) std::vector<T> foo; for (int n=0;n<seq.size();foo.push_back(seq[n++]));
+int loop=0;
+cudatimer tDot;
+cudatimer tScore;
 
-float mscore_kgpu_thrust_dot(unsigned long &lCount,const vmiTypeGPU &_spectrum,unsigned long const *_plSeq,
-                    thrust::device_vector<float> &_miUsed) {
-    thrust::host_vector<int> hseq;  
-    for (unsigned long const *p = _plSeq;*p;) {
-        hseq.push_back(*p++);
-    }
-
-    thrust::device_vector<int> seq(hseq);
-
+float mscore_kgpu_thrust_dot(unsigned long &lCount,
+    const vmiTypeGPU &_spectrum,
+    thrust::device_vector<int> *seq, int seqstart, int seqend,
+    thrust::device_vector<float> &_miUsed) {
+CUDA_TIMER_START(tDot)
+    thrust::device_vector<int>::iterator seq_begin = seq->begin()+seqstart;
+    thrust::device_vector<int>::iterator seq_end = seq->begin()+seqend;
     // for each peak mz in current sequence, find the first peak in the spectrum
     // of greater or equal mz, store map in seqindex
-    thrust::device_vector<int> seqindex(seq.size()); 
-    thrust::lower_bound(_spectrum.iM->begin(),_spectrum.iM->end(),seq.begin(),seq.end(),seqindex.begin());
+    size_t seq_size=seqend-seqstart;
+    thrust::device_vector<int> seqindex(seq_size); 
+    thrust::lower_bound(_spectrum.iM->begin(),_spectrum.iM->end(),seq_begin,seq_end,seqindex.begin());
     int trimEnd; // ignore any sequence m/z > spectrum m/z
-    for (trimEnd=0;(trimEnd<seq.size())&&*(seqindex.end()-(trimEnd+1))==_spectrum.iM->size();trimEnd++);
+    for (trimEnd=0;(trimEnd<seq_size)&&*(seqindex.end()-(trimEnd+1))==_spectrum.iM->size();trimEnd++);
 
     float miUsedSum = thrust::reduce(_miUsed.begin(),_miUsed.end());
     // now do dot on peak mz values that appear in seq and spectrum
-     thrust::device_vector<int> lcounts(seq.size());
+     thrust::device_vector<int> lcounts(seqend-seqstart);
     thrust::for_each(
         thrust::make_zip_iterator( 
             thrust::make_tuple(
-                seq.begin(),
+                seq_begin,
                 thrust::make_permutation_iterator(_spectrum.iM->begin(), seqindex.begin() ), 
                 thrust::make_permutation_iterator(_spectrum.fI->begin(), seqindex.begin() ), 
-                thrust::make_permutation_iterator(_miUsed.begin(), seq.begin() ),
+                thrust::make_permutation_iterator(_miUsed.begin(), seq_begin ),
                 lcounts.begin())), 
         thrust::make_zip_iterator(
             thrust::make_tuple(
-                seq.end()-trimEnd,
+                seq_end-trimEnd,
                 thrust::make_permutation_iterator(_spectrum.iM->begin(), seqindex.end())-trimEnd, 
                 thrust::make_permutation_iterator(_spectrum.fI->begin(), seqindex.end())-trimEnd, 
-                thrust::make_permutation_iterator(_miUsed.begin(), seq.end())-trimEnd,
+                thrust::make_permutation_iterator(_miUsed.begin(), seq_end)-trimEnd,
                 lcounts.end()-trimEnd)), 
          dot_functor());
 
     lCount = thrust::reduce(lcounts.begin(),lcounts.end()); // sum of all lcounts
+CUDA_TIMER_STOP(tDot)
+CUDA_TIMER_START(tScore)
     // now check for left and right neighbors to contribute 50%
-    thrust::device_vector<int> neighbors(seq);
+    thrust::device_vector<int> neighbors(seq_begin,seq_end);
     // look left
     thrust::transform(neighbors.begin(),neighbors.end(),neighbors.begin(),incrementby(-1));
     thrust::transform(seqindex.begin(),seqindex.end(),seqindex.begin(),incrementby(-1));
@@ -454,6 +473,8 @@ float mscore_kgpu_thrust_dot(unsigned long &lCount,const vmiTypeGPU &_spectrum,u
 
     // and get total score
     float dScore = thrust::reduce(_miUsed.begin(),_miUsed.end())- miUsedSum;
+CUDA_TIMER_STOP(tScore)
+
     return (dScore);
 }
 
