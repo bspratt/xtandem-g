@@ -44,14 +44,16 @@ protected:
 
     mscore_kgpu(void);    // Should only be created through mscorefactory_tandem
 
-    thrust::device_vector<float> *m_miUsed; // intensities of used masses
-    std::vector<vmiTypeGPU> m_vmiTypeGPU; // processed intensity-m/z pairs
+    pinned_host_vector_float_t m_dScores;
+    pinned_host_vector_int_t m_lCounts;
+    std::vector<vmiTypeGPU> m_vSpectraGPU; // processed intensity-m/z pairs
     std::vector<mspectrum *> m_vSpectra; // spectra we'll be scoring
 
 public:
     virtual ~mscore_kgpu(void);
 
 public: // inherit anything we don't cuda-ize
+   	virtual bool load_next(void); 
     virtual void prescore(const size_t _i);
     virtual double dot(unsigned long *_v); // this is where the real scoring happens
     virtual bool add_mi(mspectrum &_s);
@@ -73,10 +75,14 @@ protected:
     int m_current_playback_sequence;
     int m_current_playback_sequence_begin;
     int m_current_playback_sequence_end;
-    std::vector<float> m_cached_sequences_f;
+    int n_cached_sequences;
+    int m_previous_lId;
+    std::string m_previousSequence;
+    bool m_sequenceIsSameAsLastTime;
     std::vector<long> m_cached_sequences_l;
     thrust::device_vector<int> *m_cached_sequences_i;
     std::vector<int> m_cached_sequences_index;
+    std::vector<int> m_cached_sequence_lengths;
 };
 
 /*

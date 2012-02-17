@@ -141,38 +141,105 @@ mplugin* mscorefactory_kgpu::create_plugin()
         logevent(error, init, "Error - insufficient GPU memory, using non-GPU k-score" << endl);
         return new mscore_k();
     }
+    mscore_kgpu_thrust_init();
     return new mscore_kgpu();
 }
 
-mscore_kgpu::mscore_kgpu(void) : mscore_k(), m_miUsed(NULL), m_preloading(false), m_cached_sequences_i(NULL)
+mscore_kgpu::mscore_kgpu(void) : mscore_k(), m_preloading(false), m_cached_sequences_i(NULL)
 {
+    clear();
 }
 
 mscore_kgpu::~mscore_kgpu(void)
 {
     clear();
-    mscore_kgpu_thrust_fvec_kill(m_miUsed);
-    
+  
 }
 
 bool mscore_kgpu::clear()
 {
     bool ret = mscore_k::clear();
-    for (int n=m_vmiTypeGPU.size();n--;) {
-        m_vmiTypeGPU[n].kill();
+    for (int n=m_vSpectraGPU.size();n--;) {
+        m_vSpectraGPU[n].kill();
     }
-    m_vmiTypeGPU.resize(0);
+    m_vSpectraGPU.resize(0);
     clear_sequence_cache();
     return ret;
 }
 
 void mscore_kgpu::clear_sequence_cache() {
-    mscore_kgpu_thrust_ivec_kill(m_cached_sequences_i);
-    m_cached_sequences_i = NULL;
     m_cached_sequences_l.resize(0);
-    m_cached_sequences_f.resize(0);
     m_cached_sequences_index.resize(0);
+    m_cached_sequence_lengths.resize(0);
+    m_previous_lId = -1;
 }
+
+bool mscore_kgpu::load_next(void) {  
+    return mscore_k::load_next();  // TODO - lookahead so we can gang up dot() work
+
+#ifdef TODO
+     needs to preprocess this logic in the calling mprocess object and play back the m_pScore behavior:
+
+    			    while(m_pScore->load_next())	{
+						m_tPeptideCount += m_pScore->m_State.m_lEqualsS;
+						m_bPermute = false;
+						m_bPermuteHigh = false;
+						create_score(_s,lStart,lEnd,lMissedCleaves - 1,true);
+						if(m_bPermute && m_bCrcCheck || m_bPermuteHigh)	{
+							m_pScore->reset_permute();
+							while(m_pScore->permute())	{
+								create_score(_s,lStart,lEnd,lMissedCleaves - 1,false);
+							}
+						}
+					}
+
+which means reproducing the minumum functionality of mprocess::create_score and playing back the m_pScore behavior
+
+bool mprocess::create_score(const msequence &_s,const size_t _v,const size_t _w,const long _m,bool _p)
+{
+	long lIonCount = 0;
+	float fScore = -1.0;
+	float fHyper = -1.0;
+	size_t a = 0;
+	size_t b = 0;
+	size_t c = 0;
+	bool bOk = false;
+	bool bDom = false;
+	long lCount = 0;
+	bool bIonCheck = false;
+	bool bMassCheck = false;
+/*
+ * score each mspectrum identified as a candidate in the m_pScore->m_State object
+ */
+	while(lCount < m_pScore->m_State.m_lEqualsS)	{
+		a = m_pScore->m_State.m_plEqualsS[lCount];
+		lCount++;
+		lIonCount = 0;
+/*
+* this check is needed to keep tandem consistent whether running on
+* single-threaded, multi-threaded or on a cluster.  otherwise, when
+* there are multiple spectra matching a sequence (which is more common
+* the fewer mprocess objects there are) one can cause others to score
+* more permutation sequences.
+*/
+		if (!_p && m_vSpectra[a].m_hHyper.m_ulCount >= 400)
+			continue;
+		fScore = 1.0;
+		fHyper = 1.0;
+		m_pScore->m_lMaxCharge = (long)(m_vSpectra[a].m_fZ+0.1);
+/*
+ * in versions prior to 2004.03.01, spectra with m_bActive == false were
+ * rejected at this point, to save time & because of a problem with
+ * multiple recording of the same sequence. starting with 2004.03.01,
+ * the later problem has been corrected, and because of point mutation
+ * analysis, it has become important to reexamine all sequences.
+ */
+		fScore = m_pScore->score(a);
+		fHyper = m_pScore->m_fHyper;
+    }
+#endif
+}
+
 
 /*
  * called before scoring inside the score() function to allow any
@@ -185,27 +252,44 @@ void mscore_kgpu::prescore(const size_t _i)
         return;
     }
 
-    // Initialize of clear the used intensity look-up.
-    if (m_miUsed == NULL)
-        m_miUsed = mscore_kgpu_thrust_fvec_alloc(m_maxEnd);
-    else
-        mscore_kgpu_thrust_fvec_clear(m_miUsed);
-    clear_sequence_cache();
-
-    // preprocess data for dot() - runs
-    // mscore::score, without the calls to dot()
-    m_vSpectra.clear();
-    m_preloading = true;
-    score(_i); // runs through gathering sequences without performing dot()
-    m_preloading = false;
-    m_current_playback_sequence = 0;
-    //  convert to in and push to device memory
-    pinned_host_vector_int_t cached_sequences_h(m_cached_sequences_l.size());
-    pinned_host_vector_int_t::iterator cs = cached_sequences_h.begin();
-    for (std::vector<long>::iterator it = m_cached_sequences_l.begin(); it != m_cached_sequences_l.end();) {
-        *cs++ = *it++;
+    // check to see if we can just use the same sequence modifications again
+   m_sequenceIsSameAsLastTime = false;
+    if ((m_previous_lId>=0) && (this->m_vSpec[m_previous_lId].m_fZ == m_vSpec[m_lId].m_fZ) &&
+        (m_previousSequence==this->m_pSeq)) {
+        int n;
+        long maxSeqMZ = (long)m_vSpectraGPU[m_lId].iM_max; // ignore any sequence members greater that largest spectra mz
+        for (n=m_cached_sequences_index.size();n-->1;) {
+            if (m_cached_sequences_l[m_cached_sequences_index[n]-1] > maxSeqMZ) {
+                break;
+            }
+        }
+        if (!n) {
+            m_sequenceIsSameAsLastTime = true;
+        }
     }
-    m_cached_sequences_i = mscore_kgpu_thrust_device_copy(cached_sequences_h);
+    if (m_sequenceIsSameAsLastTime) {
+        // we can just play back the same sequence modifications
+        m_current_playback_sequence = 0;
+    } else {
+        // preprocess data for dot() - runs
+        // mscore::score, without the calls to dot()
+        m_previousSequence = m_pSeq;
+        n_cached_sequences = 0;
+        clear_sequence_cache();
+        m_vSpectra.clear();
+        m_preloading = true;
+        score(_i); // runs through gathering sequences without performing dot()
+        m_preloading = false;
+        m_current_playback_sequence = 0;
+        //  convert to int and push to device memory
+        pinned_host_vector_int_t cached_sequences_h(m_cached_sequences_l.size());
+        pinned_host_vector_int_t::iterator cs = cached_sequences_h.begin();
+        for (std::vector<long>::iterator it = m_cached_sequences_l.begin(); it != m_cached_sequences_l.end();) {
+            *cs++ = *it++;
+        }
+        m_cached_sequences_i = mscore_kgpu_thrust_device_copy(cached_sequences_h,m_cached_sequences_i);
+    }
+    m_previous_lId = m_lId; // next time we come through here, see if we can reuse all this
 }
 
 bool mscore_kgpu::load_seq(const unsigned long _t,const long _c) {
@@ -219,24 +303,28 @@ bool mscore_kgpu::load_seq(const unsigned long _t,const long _c) {
 }
 
 void mscore_kgpu::cache_sequence() {
+    m_cached_sequence_lengths.push_back(m_lSeqLength); // preserve state - not easily derivable
+
     // jam sequence info into contiguous memory for cheap transfer to device
     int seqlen;
-    for (seqlen=0 ; m_plSeq[seqlen]; seqlen++); // get length of new sequence
+    // get length of new sequence, ignore any members greater than max spectrum mz
+    for (seqlen=0 ; m_plSeq[seqlen] && (m_plSeq[seqlen] <= (unsigned long)m_vSpectraGPU[m_lId].iM_max); seqlen++); 
     int prev_end=m_cached_sequences_l.size(); // note end of list
     m_cached_sequences_index.push_back(prev_end); // note where to find new sequence
-    m_cached_sequences_f.resize(m_cached_sequences_f.size()+seqlen+1);
-    memmove(&m_cached_sequences_f[prev_end],this->m_pfSeq,(seqlen+1)*sizeof(float));
-    m_cached_sequences_l.resize(m_cached_sequences_l.size()+seqlen+1);
-    memmove(&m_cached_sequences_l[prev_end],this->m_plSeq,(seqlen+1)*sizeof(long));
+    m_cached_sequences_l.resize(m_cached_sequences_l.size()+seqlen);
+    memmove(&m_cached_sequences_l[prev_end],m_plSeq,seqlen*sizeof(long));
+    n_cached_sequences++;
 }
 
 bool mscore_kgpu::playback_sequence() {
+    m_lSeqLength = m_cached_sequence_lengths[m_current_playback_sequence];
     m_current_playback_sequence_begin = m_cached_sequences_index[m_current_playback_sequence++];
     m_current_playback_sequence_end = (m_current_playback_sequence==m_cached_sequences_index.size())?
         m_cached_sequences_l.size():
         m_cached_sequences_index[m_current_playback_sequence];
-    memmove(m_pfSeq,&m_cached_sequences_f[m_current_playback_sequence_begin],(m_current_playback_sequence_end-m_current_playback_sequence_begin)*sizeof(float));
-    memmove(m_plSeq,&m_cached_sequences_l[m_current_playback_sequence_begin],(m_current_playback_sequence_end-m_current_playback_sequence_begin)*sizeof(long));
+   int len = (m_current_playback_sequence_end-m_current_playback_sequence_begin);
+    memmove(m_plSeq,&m_cached_sequences_l[m_current_playback_sequence_begin], len*sizeof(long));
+    m_plSeq[len] = 0;
     return true;
 }
 
@@ -330,9 +418,9 @@ cudatimer mi_time;CUDA_TIMER_START(mi_time);
                 int endMassMax = (int)(((_s.m_dMH + (_s.m_fZ - 1) * m_seqUtil.m_dProton) / _s.m_fZ) * 2.0 + 0.5) + iWindowCount;
 
                 // now pass off to CUDA implementation
-                mscore_kgpu_thrust_score(dfM,dfI,n_pairs,n_pairs+_s.m_vMI.size(),m_dIsotopeCorrection,iWindowCount,endMassMax,m_maxEnd,vTypeGPU); // results come back in vTypeGPU
+                mscore_kgpu_thrust_score(dfM.begin()+n_pairs,dfI.begin()+n_pairs,_s.m_vMI.size(),m_dIsotopeCorrection,iWindowCount,endMassMax,m_maxEnd,vTypeGPU); // results come back in vTypeGPU
             }
-            m_vmiTypeGPU.push_back(vTypeGPU);
+            m_vSpectraGPU.push_back(vTypeGPU);
             n_pairs += _s.m_vMI.size();
         }
 CUDA_TIMER_STOP(mi_time)
@@ -354,12 +442,28 @@ bool mscore_kgpu::add_details(mspectrum &_s)
  * number in the m_vsmapMI vector. the sequence is represented by the values
  * that are currently held in m_plSeq (integer masses).
  */
+int kgfoo = 0;
 double mscore_kgpu::dot(unsigned long *_v)
 {
     if (m_preloading) {
-        return 1.0;  // not yet, still loading spectra
+        return 0.0;  // not yet, still loading spectra
     } else {
-        return mscore_kgpu_thrust_dot(*_v,m_vmiTypeGPU[m_lId],m_cached_sequences_i, m_current_playback_sequence_begin, m_current_playback_sequence_end,*m_miUsed);
+        if (!m_current_playback_sequence_begin) {
+            if (!m_sequenceIsSameAsLastTime) {
+                m_dScores.resize(n_cached_sequences);
+                m_lCounts.resize(n_cached_sequences);
+                m_cached_sequences_index.push_back(m_cached_sequences_l.size()); // note end
+            }
+            mscore_kgpu_thrust_dot(m_lCounts,m_dScores,m_vSpectraGPU[m_lId],
+                m_cached_sequences_i->begin(),m_cached_sequences_index,
+                m_sequenceIsSameAsLastTime);
+        }
+
+
+        *_v = (unsigned long)m_lCounts[m_current_playback_sequence-1];
+if (!(kgfoo++%1000)) std::cout<<kgfoo<<"\n";
+//printf("%d %d %f\n",kgfoo,*_v,m_dScores[m_current_playback_sequence-1]);
+        return m_dScores[m_current_playback_sequence-1];
     }
 }
 

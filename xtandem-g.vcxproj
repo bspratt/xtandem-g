@@ -45,7 +45,7 @@
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="..\..\..\src\tpp_common_release.props" />
+    <Import Project="..\..\..\src\tpp_common_profile.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -99,6 +99,7 @@ copy "$(SolutionDir)..\extern\xtandem\bin\tandem-style.xsl" "$(OutDir)"
       <Defines>XML_STATIC;MSVC;PLUGGABLE_SCORING;READ_GZIP;HAVE_ZLIB;HAVE_MULTINODE_TANDEM;HAVE_PWIZ_MZML_LIB;%(PreprocessorDefinitions);%(Defines)</Defines>
       <Include>$(SolutionDir)..\extern\zlib125-dll;$(SolutionDir)..\extern\gzstream;$(SolutionDir)..\extern\boost_1_45_0;$(SolutionDir)..\extern\ProteoWizard\pwiz;$(SolutionDir)Parsers/ramp;$(CUDA_PATH)/include;%(AdditionalIncludeDirectories);%(Include)</Include>
       <Runtime>MTd</Runtime>
+      <Keep>true</Keep>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -139,12 +140,13 @@ copy "$(SolutionDir)..\extern\xtandem\bin\tandem-style.xsl" "$(OutDir)"
       <Defines>XML_STATIC;MSVC;PLUGGABLE_SCORING;READ_GZIP;HAVE_ZLIB;HAVE_MULTINODE_TANDEM;HAVE_PWIZ_MZML_LIB;%(PreprocessorDefinitions)</Defines>
       <Include>$(SolutionDir)..\extern\zlib125-dll;$(SolutionDir)..\extern\gzstream;$(SolutionDir)..\extern\boost_1_45_0;$(SolutionDir)..\extern\ProteoWizard\pwiz;$(SolutionDir)Parsers/ramp;$(CUDA_PATH)/include;%(AdditionalIncludeDirectories);%(Include)</Include>
       <Runtime>MT</Runtime>
+      <Keep>true</Keep>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'">
     <ClCompile>
       <AdditionalIncludeDirectories>$(SolutionDir)..\extern\zlib123-dll;$(SolutionDir)..\extern\gzstream;$(SolutionDir)Parsers/ramp;$(CUDA_PATH)/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>XML_STATIC;MSVC;PLUGGABLE_SCORING;READ_GZIP;HAVE_ZLIB;HAVE_MULTINODE_TANDEM;HAVE_PWIZ_MZML_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>PROFILE;XML_STATIC;MSVC;PLUGGABLE_SCORING;READ_GZIP;HAVE_ZLIB;HAVE_MULTINODE_TANDEM;HAVE_PWIZ_MZML_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <PrecompiledHeader>
       </PrecompiledHeader>
@@ -178,6 +180,7 @@ copy "$(SolutionDir)..\extern\xtandem\bin\tandem-style.xsl" "$(OutDir)"
       <Defines>XML_STATIC;MSVC;PLUGGABLE_SCORING;READ_GZIP;HAVE_ZLIB;HAVE_MULTINODE_TANDEM;HAVE_PWIZ_MZML_LIB;%(PreprocessorDefinitions)</Defines>
       <Include>$(SolutionDir)..\extern\zlib125-dll;$(SolutionDir)..\extern\gzstream;$(SolutionDir)..\extern\boost_1_45_0;$(SolutionDir)..\extern\ProteoWizard\pwiz;$(SolutionDir)Parsers/ramp;$(CUDA_PATH)/include;%(AdditionalIncludeDirectories);%(Include)</Include>
       <Runtime>MT</Runtime>
+      <Keep>true</Keep>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -295,7 +298,11 @@ copy "$(SolutionDir)..\extern\xtandem\bin\tandem-style.xsl" "$(OutDir)"
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="mscore_kgpu_thrust.cu" />
+    <CudaCompile Include="mscore_kgpu_thrust.cu">
+      <AdditionalDeps Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(MSBuildProjectDirectory)\mscore_kgpu_thrust.h</AdditionalDeps>
+      <AdditionalDeps Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'">$(MSBuildProjectDirectory)\mscore_kgpu_thrust.h</AdditionalDeps>
+      <AdditionalDeps Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(MSBuildProjectDirectory)\mscore_kgpu_thrust.h</AdditionalDeps>
+    </CudaCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

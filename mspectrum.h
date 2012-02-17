@@ -145,25 +145,16 @@ The End
 /*
  * mi objects contain the m/z - intensity information about a single peak in a spectrum
  */
-class mi
+struct mi // was class, with virtual dtor, all overkill
 {
 public:
 	mi(void) {
 		m_fM = 0.0; 
 		m_fI = 1.0;
 	}
-	virtual ~mi(void) { }
 
 	float m_fM; // the m/z value
 	float m_fI; // the intensity value
-/*
- * a simple copy operation, using the = operator
- */
-	mi& operator=(const mi &rhs)	{
-		m_fM = rhs.m_fM;
-		m_fI = rhs.m_fI;
-		return *this;
-	}
 };
 
 class mspectrum	{
