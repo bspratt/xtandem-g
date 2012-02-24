@@ -53,7 +53,7 @@ public:
     virtual ~mscore_kgpu(void);
 
 public: // inherit anything we don't cuda-ize
-   	virtual bool load_next(void); 
+   	virtual bool load_next(const mprocess *_parentProcess); 
     virtual void prescore(const size_t _i);
     virtual double dot(unsigned long *_v); // this is where the real scoring happens
     virtual bool add_mi(mspectrum &_s);
@@ -69,6 +69,13 @@ protected:
 	virtual bool add_Y(const unsigned long _t,const long _c);
 	virtual bool add_X(const unsigned long _t,const long _c);
 	virtual bool add_Z(const unsigned long _t,const long _c);
+    // for lookahead in mscore::load_next
+    int m_nModifiedSequencePreloadCount;
+    int m_currentModifiedSequencePreload;
+    bool m_FakeProcess_bPermute;
+    bool m_FakeProcess_bPermuteHigh;
+    bool fakeProcess_create_score(const mprocess *_parentProcess,bool _p);
+
     void clear_sequence_cache();
     void cache_sequence();
     bool playback_sequence();

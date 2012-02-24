@@ -546,7 +546,7 @@ public:
 	unsigned long add_seq(const char *_s,const bool _n,const bool _c,const unsigned long _l,const int _f);
 	bool sort_details();
 	bool get_aa(vector<maa> &_m,const size_t _a,double &_d);
-	virtual bool load_next(void);  // made virtual in support of pluggable scoring bpratt
+	virtual bool load_next(const mprocess *_parentProcess);  // made virtual and added arg in support of pluggable scoring bpratt
 	bool load_state(void);
 #ifdef PLUGGABLE_SCORING
 // To mimic SEQUEST-like scoring, a scoring plugin has to modify the theoretical fragment ion series to 

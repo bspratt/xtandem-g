@@ -18,6 +18,7 @@
  */
 
 #include "mscore_kgpu.h"
+#include "mprocess.h"
 #include "cuda.h"
 #include <iostream>
 #include <sstream>
@@ -172,49 +173,52 @@ void mscore_kgpu::clear_sequence_cache() {
     m_cached_sequences_index.resize(0);
     m_cached_sequence_lengths.resize(0);
     m_previous_lId = -1;
+    m_nModifiedSequencePreloadCount = 0;
+    m_currentModifiedSequencePreload = -1;
 }
 
-bool mscore_kgpu::load_next(void) {  
-    return mscore_k::load_next();  // TODO - lookahead so we can gang up dot() work
+bool mscore_kgpu::load_next(const mprocess *_parentProcess) {  
+return mscore_k::load_next(_parentProcess); // so this runs - TODO complete the lookahead - batch stuff
 
-#ifdef TODO
-     needs to preprocess this logic in the calling mprocess object and play back the m_pScore behavior:
+    // anything ready for playback?
+    if (!m_nModifiedSequencePreloadCount) {
+        while (mscore_k::load_next(_parentProcess)) { // lookahead so we can gang up dot() work
+            m_nModifiedSequencePreloadCount++;
+            // mimic the calling mprocess object and play back the m_pScore behavior later
+            m_FakeProcess_bPermute = false;
+            m_FakeProcess_bPermuteHigh = false;
+            fakeProcess_create_score(_parentProcess,true);
+            if(m_FakeProcess_bPermute && _parentProcess->m_bCrcCheck || m_FakeProcess_bPermuteHigh)	{
+                reset_permute();
+                while(permute())	{
+                    fakeProcess_create_score(_parentProcess,false);
+                }
+            }
+        }
+        //now do the dot products
 
-    			    while(m_pScore->load_next())	{
-						m_tPeptideCount += m_pScore->m_State.m_lEqualsS;
-						m_bPermute = false;
-						m_bPermuteHigh = false;
-						create_score(_s,lStart,lEnd,lMissedCleaves - 1,true);
-						if(m_bPermute && m_bCrcCheck || m_bPermuteHigh)	{
-							m_pScore->reset_permute();
-							while(m_pScore->permute())	{
-								create_score(_s,lStart,lEnd,lMissedCleaves - 1,false);
-							}
-						}
-					}
+        // and prepare to play back
+        m_currentModifiedSequencePreload = 0;
+    }
+    if (m_currentModifiedSequencePreload < m_nModifiedSequencePreloadCount) {
+        //play back the next 
+        m_currentModifiedSequencePreload++;
+        return true;
+    }
+    m_nModifiedSequencePreloadCount = 0; // exhausted playback list
+    return false;
+}
 
-which means reproducing the minumum functionality of mprocess::create_score and playing back the m_pScore behavior
-
-bool mprocess::create_score(const msequence &_s,const size_t _v,const size_t _w,const long _m,bool _p)
-{
-	long lIonCount = 0;
-	float fScore = -1.0;
-	float fHyper = -1.0;
+// mimic the salient parts of calling mprocess create_score() for lookahead purposes
+bool mscore_kgpu::fakeProcess_create_score(const mprocess *_parentProcess,bool _p) {
 	size_t a = 0;
-	size_t b = 0;
-	size_t c = 0;
-	bool bOk = false;
-	bool bDom = false;
 	long lCount = 0;
-	bool bIonCheck = false;
-	bool bMassCheck = false;
 /*
  * score each mspectrum identified as a candidate in the m_pScore->m_State object
  */
-	while(lCount < m_pScore->m_State.m_lEqualsS)	{
-		a = m_pScore->m_State.m_plEqualsS[lCount];
+	while(lCount < m_State.m_lEqualsS)	{
+		a = m_State.m_plEqualsS[lCount];
 		lCount++;
-		lIonCount = 0;
 /*
 * this check is needed to keep tandem consistent whether running on
 * single-threaded, multi-threaded or on a cluster.  otherwise, when
@@ -222,22 +226,12 @@ bool mprocess::create_score(const msequence &_s,const size_t _v,const size_t _w,
 * the fewer mprocess objects there are) one can cause others to score
 * more permutation sequences.
 */
-		if (!_p && m_vSpectra[a].m_hHyper.m_ulCount >= 400)
+		if (!_p && _parentProcess->m_vSpectra[a].m_hHyper.m_ulCount >= 400)  // TODO make this magic number a #define shared with mprocess
 			continue;
-		fScore = 1.0;
-		fHyper = 1.0;
-		m_pScore->m_lMaxCharge = (long)(m_vSpectra[a].m_fZ+0.1);
-/*
- * in versions prior to 2004.03.01, spectra with m_bActive == false were
- * rejected at this point, to save time & because of a problem with
- * multiple recording of the same sequence. starting with 2004.03.01,
- * the later problem has been corrected, and because of point mutation
- * analysis, it has become important to reexamine all sequences.
- */
-		fScore = m_pScore->score(a);
-		fHyper = m_pScore->m_fHyper;
+		m_lMaxCharge = (long)(_parentProcess->m_vSpectra[a].m_fZ+0.1);
+		score(a);
     }
-#endif
+    return true;
 }
 
 

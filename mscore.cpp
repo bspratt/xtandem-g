@@ -1067,7 +1067,7 @@ void mscore::report_score(char* buffer, float hyperscore)
  *       of the potential modifications in place. maintaining this order is important
  *       to the correct functioning of the logic using in mprocess.
  */
-bool mscore::load_next(void)
+bool mscore::load_next(const mprocess *_parentProcess) // arg added for pluggable scoring, this default implementation doesn't need it
 {
 	bool bReturn = false;
 	if(!(m_bUsePam || m_bUseSaps))	{
@@ -1517,6 +1517,7 @@ bool mscore::run_state_machine(void)
  */
 float mscore::score(const size_t _i)
 {
+
 	m_fScore = -1.0;
 	m_fHyper = -1.0;
 	double dFactor = 1.0;
