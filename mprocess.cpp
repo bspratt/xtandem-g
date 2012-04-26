@@ -2833,7 +2833,7 @@ bool mprocess::score_single(const msequence &_s)
 	* use the m_pScore state machine to obtain allowed modified peptides that have
 	* the same sequence. then use create_score to score relavent spectra
 	*/
-					while(m_pScore->load_next())	{
+					while(m_pScore->load_next(this))	{ // arg added to support pluggable scoring bpratt
 						m_tPeptideCount += m_pScore->m_State.m_lEqualsS;
 						m_bPermute = false;
 						m_bPermuteHigh = false;

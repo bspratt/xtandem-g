@@ -143,26 +143,21 @@ The End
  */
 
 
-class mscorestate
+class mscorestate // bpratt change to use std::vector for easy copy
 {
 public:
       mscorestate(void) {    
             m_lSizeS = 128;
-            m_pSeqS = new char[m_lSizeS];
-            m_ppModsS = new char*[m_lSizeS];
-            m_piMods = new unsigned long[m_lSizeS];
+            m_pSeq.resize(m_lSizeS);
+            m_pSeqS = &m_pSeq[0];
+            m_ppModsS.resize(m_lSizeS);
+            m_piMods.resize(m_lSizeS);
 			m_lSizeEqualsS = 256;
-            m_plEqualsS = new long[m_lSizeEqualsS];
+            m_plEqualsS.resize(m_lSizeEqualsS);
             m_lEqualsS = 0;
             m_lEligibleS = 0;
       }
       virtual ~mscorestate(void) {
-            if(m_plEqualsS != NULL)
-                  delete m_plEqualsS;
-            if(m_pSeqS != NULL)
-                  delete m_pSeqS;
-            if(m_ppModsS != NULL)
-                  delete m_ppModsS;
       }
       bool m_bStateS; // true if there are more potential sequences
       double m_dSeqMHS; // M+H mass of the unmodified peptide
@@ -177,20 +172,20 @@ public:
       unsigned long m_lStates;
       long m_lSizeS; // maximum peptide length
       long m_lSizeEqualsS; // maximum length of EqualS array
-      long *m_plEqualsS; // indexes of spectra with M+H within error of the current modified peptide M+H
-      unsigned long *m_piMods;
-      char **m_ppModsS; // pointers to the potentially modified peptide residues
-      char *m_pSeqS; // the unmodified peptide sequence
+      std::vector<long> m_plEqualsS; // indexes of spectra with M+H within error of the current modified peptide M+H
+      std::vector<unsigned long> m_piMods;
+      std::vector<char *> m_ppModsS; // pointers to the potentially modified peptide residues
+      std::vector<char> m_pSeq; // the unmodified peptide sequence
+      char* m_pSeqS; // the unmodified peptide sequence
 /*
  * make sure that m_lSizeS is big enough for a peptide, length _s. if not, update array sizes
  */   bool check_size(const long _s)     
       {
             if(_s > m_lSizeS) {
                   m_lSizeS = _s + 1;
-                  delete[] m_pSeqS;
-                  delete[] m_ppModsS;
-                  m_pSeqS = new char[m_lSizeS];
-                  m_ppModsS = new char*[m_lSizeS];
+                  m_pSeq.resize(m_lSizeS);
+                  m_pSeqS = &m_pSeq[0];
+                  m_ppModsS.resize(m_lSizeS);
             }
             return true;
       }
@@ -201,12 +196,8 @@ public:
       {
 		  if(_s < m_lSizeEqualsS)
 			  return true;
-          if(m_plEqualsS != NULL)
-               delete[] m_plEqualsS;
 		  m_lSizeEqualsS = _s + 1;
-          m_plEqualsS = new long[m_lSizeEqualsS];
-          if(m_plEqualsS == NULL)
-				return false;
+          m_plEqualsS.resize(m_lSizeEqualsS);
           return true;
       }
 /*
@@ -215,7 +206,7 @@ public:
       bool initialize(const char *_p,const long _s)
       {
             check_size(_s);
-            strcpy(m_pSeqS,_p);
+            strcpy(&m_pSeqS[0],_p);
             m_lStates = 0;
             m_lFilledS = 0;
             m_lCursorS = 0;

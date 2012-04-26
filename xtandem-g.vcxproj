@@ -69,11 +69,11 @@
       <MinimalRebuild>true</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <PrecompiledHeader>
-      </PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <DisableSpecificWarnings>4996;4244;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <TreatWarningAsError>false</TreatWarningAsError>
     </ClCompile>
     <Link>
       <OutputFile>$(OutDir)xtandem-g.exe</OutputFile>
@@ -110,9 +110,9 @@ copy "$(SolutionDir)..\extern\xtandem\bin\tandem-style.xsl" "$(OutDir)"
       <PrecompiledHeader>
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
-      <DebugInformationFormat>
-      </DebugInformationFormat>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>4996;4244;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <TreatWarningAsError>false</TreatWarningAsError>
     </ClCompile>
     <Link>
       <OutputFile>$(OutDir)xtandem-g.exe</OutputFile>
@@ -153,6 +153,7 @@ copy "$(SolutionDir)..\extern\xtandem\bin\tandem-style.xsl" "$(OutDir)"
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>4996;4244;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <TreatWarningAsError>false</TreatWarningAsError>
     </ClCompile>
     <Link>
       <OutputFile>$(OutDir)xtandem-g.exe</OutputFile>

@@ -73,13 +73,31 @@ void mscore_kgpu_thrust_ivec_kill(thrust::device_vector<int> *vec) {
     delete vec;
 }
 
-thrust::device_vector<int> *mscore_kgpu_thrust_device_copy(pinned_host_vector_int_t &h,thrust::device_vector<int> *dev) {
-    if (!dev) {
-        return new thrust::device_vector<int>(h);
+#define MY_CUDA_STREAM 0
+
+thrust::device_vector<int> *mscore_kgpu_thrust_host_to_device_copy(const pinned_host_vector_int_t &host_src,thrust::device_vector<int> *device_dest) {
+    if (!device_dest) {
+        device_dest = new thrust::device_vector<int>(host_src.size());
     } else {
-        *dev = h;
-        return dev;
+        device_dest->resize(host_src.size());
     }
+    cudaMemcpyAsync(thrust::raw_pointer_cast(device_dest->data()),host_src.data(),host_src.size()*sizeof(int),cudaMemcpyHostToDevice,MY_CUDA_STREAM);
+    return device_dest;
+}
+
+void mscore_kgpu_thrust_host_to_device_copy_float(const pinned_host_vector_float_t &host_src,thrust::device_vector<float> &device_dest) {
+    device_dest.resize(host_src.size());
+    cudaMemcpyAsync(thrust::raw_pointer_cast(device_dest.data()),host_src.data(),host_src.size()*sizeof(float),cudaMemcpyHostToDevice,MY_CUDA_STREAM);
+}
+
+void mscore_kgpu_thrust_device_to_host_copy_float(const thrust::device_vector<float> &device_src,pinned_host_vector_float_t &host_dest) {
+    host_dest.resize(device_src.size());
+    cudaMemcpyAsync(thrust::raw_pointer_cast(host_dest.data()),thrust::raw_pointer_cast(device_src.data()),host_dest.size()*sizeof(float),cudaMemcpyDeviceToHost,MY_CUDA_STREAM);
+}
+
+void mscore_kgpu_thrust_device_to_host_copy_int(const thrust::device_vector<int> &device_src,pinned_host_vector_int_t &host_dest) {
+    host_dest.resize(device_src.size());
+    cudaMemcpyAsync(thrust::raw_pointer_cast(host_dest.data()),thrust::raw_pointer_cast(device_src.data()),host_dest.size()*sizeof(int),cudaMemcpyDeviceToHost,MY_CUDA_STREAM);
 }
 
 #define HOSTCODE // __host__
@@ -169,7 +187,7 @@ struct imass_functor
     m_IsotopeCorrection((float)(1.0/IsotopeCorrection)),m_binOffset(binOffset) {}
     template <typename Tuple>
     HOSTCODE __device__
-        void operator()(Tuple m) // 0=raw mz 1=binned mz
+        void operator()(Tuple m) // m[0]=raw mz m[1]=binned mz
     {
         thrust::get<1>(m) =  ((int)((thrust::get<0>(m)*m_IsotopeCorrection) + 0.5f))-m_binOffset;
     }
@@ -238,7 +256,8 @@ struct squareroot
         return sqrt(x);
     }
 };
-cudatimer tScore;
+
+CUDA_TIMER_DECL(tScore);
 
 void mscore_kgpu_thrust_score(
     // m/z-intensity pairs (input)
@@ -406,14 +425,6 @@ struct dot_functor
     }
 };
 
-// helpful macro for copying to c++ space for debugger viewing
-#ifdef _DEBUG
-#define STDVECT(T,foo,seq,n) std::vector<T> foo; for (int nn=0;nn<n;foo.push_back(seq[nn++]));
-#else
-#define STDVECT(T,foo,seq,n) 
-#endif
-cudatimer tDot;
-
 #define MAX_SEQLEN 200
 thrust::device_vector<float> ones;
 thrust::device_vector<float> halves;
@@ -436,15 +447,22 @@ void mscore_kgpu_thrust_init() {
 // perform dot on current spectrum and all sequence variations at one go
 void mscore_kgpu_thrust_dot(pinned_host_vector_int_t &lCountsResult,
     pinned_host_vector_float_t &dScoresResult,
-    const vmiTypeGPU &spectrum,
-    thrust::device_vector<int>::iterator sequences, 
-    const std::vector<int> sequence_index,
-    bool sequenceIsSameAsLastTime)  // cue for skipping some setup work 
+    const std::vector<const vmiTypeGPU *> &spectra,
+    const std::vector<int> &sequenceCountAfterEachScorePreload,
+    const thrust::device_vector<int> &cached_sequences, 
+    const std::vector<int> &vsequence_index)
 {
- CUDA_TIMER_START(tDot)
-    int nSeq = sequence_index.size()-1;
-    if (!sequenceIsSameAsLastTime) {
-        seq_hits_len = spectrum.iM_max+1; // sequence is trimmed to max spectrum mz
+//puts("mscore_kgpu_thrust_dot");
+    cudaStreamSynchronize(MY_CUDA_STREAM); // wait for any preperatory memcpy to complete
+    int lastEnd = 0;
+    size_t nSeqTotal = vsequence_index.size()-1;
+    dScoresDev.resize(nSeqTotal);
+    lCountsDev.resize(nSeqTotal);
+    for (int spec=0;spec<spectra.size();lastEnd=sequenceCountAfterEachScorePreload[spec++]) {
+        const int *sequence_index = &vsequence_index[lastEnd];
+        int nSeq = (sequenceCountAfterEachScorePreload[spec]-lastEnd);
+        const vmiTypeGPU &spectrum = *spectra[spec];
+        int seq_hits_len = spectrum.iM_max+1; // sequence is trimmed to max spectrum mz
         if (lcounts.size() < seq_hits_len*nSeq) {
             lcounts.resize((seq_hits_len*nSeq)+1); // need a -1th element for sum diff later
             lcountsscan.resize((seq_hits_len*nSeq)+1); // need a -1th element for sum diff later
@@ -452,14 +470,12 @@ void mscore_kgpu_thrust_dot(pinned_host_vector_int_t &lCountsResult,
             miUsed.resize((seq_hits_len*nSeq)+1); // need a -1th element for sum diff later
             scatteredCopies.resize(seq_hits_len*nSeq);
         }
-        dScoresDev.resize(nSeq);
-        lCountsDev.resize(nSeq);
         ZEROVEC(seq_hits);
         // set up the .5 and 1.0 sequence hit multipliers
         for (int s=0;s<nSeq;s++ ) {
             int dist = sequence_index[s+1]-sequence_index[s];
             int seq_hits_offset = s*seq_hits_len;
-            thrust::device_vector<int>::iterator seq_begin = sequences+sequence_index[s];
+            thrust::device_vector<int>::const_iterator seq_begin = cached_sequences.begin()+sequence_index[s];
             // note the .5 contributions for ions to left and right of actual ions
             thrust::scatter(halves.begin(),halves.begin()+dist,thrust::make_transform_iterator(seq_begin,xform_incrementby(-1)),seq_hits.begin()+seq_hits_offset);
             thrust::scatter(halves.begin(),halves.begin()+dist,thrust::make_transform_iterator(seq_begin,xform_incrementby(1)),seq_hits.begin()+seq_hits_offset);
@@ -472,7 +488,7 @@ void mscore_kgpu_thrust_dot(pinned_host_vector_int_t &lCountsResult,
         for (int s=0;s<nSeq;s++ ) {
             int dist = sequence_index[s+1]-sequence_index[s];
             int seq_hits_offset = s*seq_hits_len;
-            thrust::device_vector<int>::iterator seq_begin = sequences+sequence_index[s];
+            thrust::device_vector<int>::const_iterator seq_begin = cached_sequences.begin()+sequence_index[s];
             // note the 1.0 contribution of actual ions
             thrust::scatter(ones.begin(),ones.begin()+dist,seq_begin,seq_hits.begin()+seq_hits_offset);
             for (int ss=s+1;ss<nSeq;ss++ ) { // and make it an underlayment for following sequences
@@ -480,73 +496,71 @@ void mscore_kgpu_thrust_dot(pinned_host_vector_int_t &lCountsResult,
                 thrust::scatter(ones.begin(),ones.begin()+dist,seq_begin,seq_hits.begin()+seq_hits_offset);
             }
         }
+        // now lay out a string of spectrum copies so we can do all sequences in one shot
+        ZEROVEC(scatteredCopies);
+        for (int s=0;s<nSeq;s++ ) {
+            thrust::scatter(spectrum.fI->begin(),spectrum.fI->end(),spectrum.iM->begin(),scatteredCopies.begin()+(s*seq_hits_len));
+        }
+
+
+        ZEROVEC(lcounts);
+        ZEROVEC(miUsed);
+        // now find the hits
+        thrust::for_each(
+            thrust::make_zip_iterator( 
+            thrust::make_tuple(
+            scatteredCopies.begin(), 
+            seq_hits.begin(), 
+            miUsed.begin()+1, 
+            lcounts.begin()+1)), 
+            thrust::make_zip_iterator(
+            thrust::make_tuple(
+            scatteredCopies.end(), 
+            seq_hits.end(), 
+            miUsed.end(),
+            lcounts.end())), 
+            dot_functor());
+        // and get total score 
+        thrust::inclusive_scan(lcounts.begin(),lcounts.end(),lcountsscan.begin()); // TODO maybe count_if?
+        thrust::for_each(
+            thrust::make_zip_iterator( thrust::make_tuple(
+            lcounts.begin(),
+            thrust::make_permutation_iterator(lcountsscan.begin(),
+            thrust::make_transform_iterator(thrust::make_counting_iterator(0),xform_multiplyby(seq_hits_len))+1),
+            thrust::make_permutation_iterator(lcountsscan.begin(),
+            thrust::make_transform_iterator(thrust::make_counting_iterator(0),xform_multiplyby(seq_hits_len))))),
+            thrust::make_zip_iterator( thrust::make_tuple(
+            lcounts.begin()+nSeq,
+            thrust::make_permutation_iterator(lcountsscan.begin(),
+            thrust::make_transform_iterator(thrust::make_counting_iterator(0),xform_multiplyby(seq_hits_len))+nSeq+1),
+            thrust::make_permutation_iterator(lcountsscan.begin(),
+            thrust::make_transform_iterator(thrust::make_counting_iterator(0),xform_multiplyby(seq_hits_len))+nSeq))),
+            a_equals_b_minus_c());
+        // lcounts now contains count of 1.0 hits for each seq, but we want just the increment
+        thrust::adjacent_difference(lcounts.begin(),lcounts.begin()+nSeq,lCountsDev.begin()+lastEnd);
+
+        // now find sum of miUsed for each seq
+        thrust::inclusive_scan(miUsed.begin()+1,miUsed.end(),miUsed.begin()+1);
+        thrust::for_each(
+            thrust::make_zip_iterator( thrust::make_tuple(
+            miUsed.begin()+1,
+            thrust::make_permutation_iterator(miUsed.begin(),
+            thrust::make_transform_iterator(thrust::make_counting_iterator(0),xform_multiplyby(seq_hits_len))+1),
+            thrust::make_permutation_iterator(miUsed.begin(),
+            thrust::make_transform_iterator(thrust::make_counting_iterator(0),xform_multiplyby(seq_hits_len))))),
+            thrust::make_zip_iterator( thrust::make_tuple(
+            miUsed.begin()+1+nSeq,
+            thrust::make_permutation_iterator(miUsed.begin(),
+            thrust::make_transform_iterator(thrust::make_counting_iterator(0),xform_multiplyby(seq_hits_len))+nSeq+1),
+            thrust::make_permutation_iterator(miUsed.begin(),
+            thrust::make_transform_iterator(thrust::make_counting_iterator(0),xform_multiplyby(seq_hits_len))+nSeq))),
+            a_equals_b_minus_c());
+        // miUsed[1:n] now contains sum of hits for each seq, but we want just the increment
+        thrust::adjacent_difference(miUsed.begin()+1,miUsed.begin()+1+nSeq,dScoresDev.begin()+lastEnd);
     }
-    // now lay out a string of spectrum copies so we can do all sequences in one shot
-    ZEROVEC(scatteredCopies);
-     for (int s=0;s<sequence_index.size()-1;s++ ) {
-         thrust::scatter(spectrum.fI->begin(),spectrum.fI->end(),spectrum.iM->begin(),scatteredCopies.begin()+(s*seq_hits_len));
-     }
-
-
-    ZEROVEC(lcounts);
-    ZEROVEC(miUsed);
-
-    // now find the hits
-    thrust::for_each(
-        thrust::make_zip_iterator( 
-        thrust::make_tuple(
-        scatteredCopies.begin(), 
-        seq_hits.begin(), 
-        miUsed.begin()+1, 
-        lcounts.begin()+1)), 
-        thrust::make_zip_iterator(
-        thrust::make_tuple(
-        scatteredCopies.end(), 
-        seq_hits.end(), 
-        miUsed.end(),
-        lcounts.end())), 
-        dot_functor());
-    // and get total score 
-    thrust::inclusive_scan(lcounts.begin(),lcounts.end(),lcountsscan.begin()); // TODO maybe count_if?
-    thrust::for_each(
-        thrust::make_zip_iterator( thrust::make_tuple(
-        lcounts.begin(),
-        thrust::make_permutation_iterator(lcountsscan.begin(),
-            thrust::make_transform_iterator(thrust::make_counting_iterator(0),xform_multiplyby(seq_hits_len))+1),
-        thrust::make_permutation_iterator(lcountsscan.begin(),
-             thrust::make_transform_iterator(thrust::make_counting_iterator(0),xform_multiplyby(seq_hits_len))))),
-        thrust::make_zip_iterator( thrust::make_tuple(
-        lcounts.begin()+lCountsDev.size(),
-        thrust::make_permutation_iterator(lcountsscan.begin(),
-           thrust::make_transform_iterator(thrust::make_counting_iterator(0),xform_multiplyby(seq_hits_len))+sequence_index.size()),
-        thrust::make_permutation_iterator(lcountsscan.begin(),
-           thrust::make_transform_iterator(thrust::make_counting_iterator(0),xform_multiplyby(seq_hits_len))+sequence_index.size()-1))),
-        a_equals_b_minus_c());
-    // lcounts now contains count of 1.0 hits for each seq, but we want just the increment
-    thrust::adjacent_difference(lcounts.begin(),lcounts.begin()+lCountsDev.size(),lCountsDev.begin());
-
-    // now find sum of miUsed for each seq
-    thrust::inclusive_scan(miUsed.begin()+1,miUsed.end(),miUsed.begin()+1);
-    thrust::for_each(
-        thrust::make_zip_iterator( thrust::make_tuple(
-        miUsed.begin()+1,
-        thrust::make_permutation_iterator(miUsed.begin(),
-            thrust::make_transform_iterator(thrust::make_counting_iterator(0),xform_multiplyby(seq_hits_len))+1),
-        thrust::make_permutation_iterator(miUsed.begin(),
-             thrust::make_transform_iterator(thrust::make_counting_iterator(0),xform_multiplyby(seq_hits_len))))),
-        thrust::make_zip_iterator( thrust::make_tuple(
-        miUsed.begin()+1+dScoresDev.size(),
-        thrust::make_permutation_iterator(miUsed.begin(),
-           thrust::make_transform_iterator(thrust::make_counting_iterator(0),xform_multiplyby(seq_hits_len))+sequence_index.size()),
-        thrust::make_permutation_iterator(miUsed.begin(),
-           thrust::make_transform_iterator(thrust::make_counting_iterator(0),xform_multiplyby(seq_hits_len))+sequence_index.size()-1))),
-        a_equals_b_minus_c());
-    // miUsed[1:n] now contains sum of hits for each seq, but we want just the increment
-    thrust::adjacent_difference(miUsed.begin()+1,miUsed.begin()+1+dScoresDev.size(),dScoresDev.begin());
-
-    lCountsResult = lCountsDev; // copy back to host memory
-    dScoresResult = dScoresDev; // copy back to host memory
-CUDA_TIMER_STOP(tDot)
+    mscore_kgpu_thrust_device_to_host_copy_int(lCountsDev,lCountsResult); // copy back to host memory
+    mscore_kgpu_thrust_device_to_host_copy_float(dScoresDev,dScoresResult); // copy back to host memory
+    cudaStreamSynchronize(MY_CUDA_STREAM); // wait for memcpy to complete
     return;
 }
 
