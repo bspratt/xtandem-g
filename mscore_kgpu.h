@@ -93,12 +93,19 @@ protected:
     class mscore_internals_cacheinfo {
     public:
         mscore_internals_cacheinfo(){};
-        mscore_internals_cacheinfo(int sequence_length, double seqMH, int lId, const char *seq_p, float *fseq_p,unsigned long *lseq_p, 
+        mscore_internals_cacheinfo(int sequence_length, double seqMH, int lId,  
+            float fMinMass, float fMaxMass,
+            unsigned long lMaxPeaks, long lMaxCharge,
+            const char *seq_p, float *fseq_p,unsigned long *lseq_p, 
             const unsigned long *plCount,
-        	const float *pfScore // convolute score information, indexed using the mscore_type_a enum
+        	const float *pfScore, // convolute score information, indexed using the mscore_type_a enum
+            unsigned long lType
                        ) : 
           m_lSeqLength(sequence_length),m_seqMH(seqMH),
-          m_lId(lId), m_sequence(seq_p?seq_p:"")
+          m_lId(lId), 
+          m_fMinMass(fMinMass), m_fMaxMass(fMaxMass),
+          m_lMaxPeaks(lMaxPeaks), m_lMaxCharge(lMaxCharge),
+          m_sequence(seq_p?seq_p:""), m_lType(lType)
           {
           m_fseq.resize(m_sequence.size());
           memmove(&m_fseq[0],fseq_p,sizeof(float)*m_fseq.size());
@@ -110,21 +117,33 @@ protected:
         int m_lSeqLength;
         double m_seqMH; 
         int m_lId;
+        float m_fMinMass;
+        float m_fMaxMass;
+        long m_lMaxCharge; // current parent ion charge
+        unsigned long m_lMaxPeaks; // if > 0, the m_lMaxPeaks most intense peaks will be used
         std::string m_sequence;
         std::vector<float> m_fseq;
         std::vector<long> m_lseq;
 	    unsigned long m_plCount[16];// ion count information, indexed using the mscore_type_a enum
 	    float m_pfScore[16];// convolute score information, indexed using the mscore_type_a enum
+        unsigned long m_lType; // current ion type - value from mscore_type
     };
     std::vector<mscore_internals_cacheinfo *> m_mscore_internals_cache;
     void save_mscore_internals() {
-        m_mscore_internals_cache.push_back(new mscore_internals_cacheinfo(m_lSeqLength,m_dSeqMH,m_lId,m_pSeq,m_pfSeq,m_plSeq,m_plCount,m_pfScore
+        m_mscore_internals_cache.push_back(new mscore_internals_cacheinfo(m_lSeqLength,m_dSeqMH,m_lId,
+            m_fMinMass,m_fMaxMass,m_lMaxPeaks,m_lMaxCharge,m_pSeq,m_pfSeq,m_plSeq,m_plCount,m_pfScore,m_lType
+
             ));
     }
     void restore_mscore_internals(int n) {
         const mscore_internals_cacheinfo &c=*m_mscore_internals_cache[n];
         m_lSeqLength = c.m_lSeqLength;
         m_lId = c.m_lId;
+	    m_fMinMass = c.m_fMinMass;
+	    m_fMaxMass = c.m_fMaxMass;
+        m_lMaxPeaks = c.m_lMaxPeaks; 
+        m_lMaxCharge = c.m_lMaxCharge;
+        m_lType = c.m_lType;
         if (m_pSeq) {
             strcpy(m_pSeq,c.m_sequence.c_str());
         }
