@@ -29,8 +29,8 @@
 
 #include "mspectrum.h"
 
-typedef thrust::host_vector<float,thrust::experimental::cuda::pinned_allocator<float>> pinned_host_vector_float_t;
-typedef thrust::host_vector<int,thrust::experimental::cuda::pinned_allocator<int>> pinned_host_vector_int_t;
+typedef thrust::host_vector<float,thrust::experimental::cuda::pinned_allocator<float> > pinned_host_vector_float_t;
+typedef thrust::host_vector<int,thrust::experimental::cuda::pinned_allocator<int> > pinned_host_vector_int_t;
 
 
 class cudatimer {public: cudaEvent_t start;cudaEvent_t stop;float elapsed; float count; float period; cudatimer():elapsed(0),count(0),period(1000){}};

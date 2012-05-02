@@ -386,7 +386,7 @@ CUDA_TIMER_START(tScore)
     // now remove any non-positive results
     iM.resize(fI.size());
     thrust::sequence(iM.begin(),iM.end(),binOffset,1); // shift back to host coords
-     thrust::zip_iterator<thrust::tuple<iveciter,fveciter>> new_end = 
+     thrust::zip_iterator<thrust::tuple<iveciter,fveciter> > new_end = 
        thrust::remove_if(thrust::make_zip_iterator(
         thrust::make_tuple(iM.begin(),fI.begin())),
         thrust::make_zip_iterator(
