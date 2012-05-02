@@ -16,7 +16,7 @@ PWIZ_LIBS= $(OBJS_PWIZ) $(BOOST_LIBS)
 VPATH= $(VPATH_PWIZ)
 endif
 
-EXECUTABLE = $(BUILD_DIR)/tandem-g
+EXECUTABLE = $(BUILD_DIR)/tandem
 GZSTREAMLIB = $(BUILD_DIR)/libgzstream.a
 
 ESCAPED_TANDEM_PARAMETERS_INSTALL_DIR=$(subst \,\\,$(TANDEM_PARAMETERS_INSTALL_DIR))
@@ -38,12 +38,12 @@ LDFLAGS = -lpthread
 endif
 LDFLAGS += -L/usr/lib -L/sw/lib -lm $(EXPAT_LIB) $(ZLIB_LIB)
 
-# building for MPI?
+# building for MPI (X!!Tandem)?
 ifneq ("$(XBANGBANG)","")
 XVARIANT = _xbangbang_
 LINKCC = mpicxx
 CXXFLAGS += -DXBANGBANG
-# is it mpich2?
+# MPI: is it mpich2?
 ifneq "$(wildcard /usr/lib64/mpich2/lib/libmpichcxx.a )" ""
 CXXFLAGS += -I /usr/include/mpich2-x86_64
 LDFLAGS += /usr/lib64/mpich2/lib/libmpichcxx.a /usr/lib64/mpich2/lib/libmpich.a
@@ -52,18 +52,18 @@ ifneq "$(wildcard /usr/local/mpich2/include )" ""
 CXXFLAGS += -I /usr/local/mpich2/include -I /usr/local/mpich2
 LDFLAGS += /usr/local/mpich2/lib/libmpichcxx.a /usr/local/mpich2/lib/libmpich.a
 else
-# is it open mpi?
-# as in StarCluster ubuntu
+# MPI: is it open mpi?
+#   as in StarCluster ubuntu
 ifneq "$(wildcard /usr/lib/openmpi/include/mpi.h )" ""
 CXXFLAGS += -I /usr/lib/openmpi/include
 CXX = mpicxx
 endif
-# as in StarCluster centos
+#   as in StarCluster centos
 ifneq "$(wildcard /usr/lib64/openmpi/1.4-gcc/include/mpi.h )" ""
 CXXFLAGS += -I /usr/lib64/openmpi/1.4-gcc/include
 CXX = mpicxx
 endif
-# as in StarCluster centos
+#   as in StarCluster centos
 ifneq "$(wildcard /usr/lib/openmpi/1.4-gcc/include/mpi.h )" ""
 CXXFLAGS += -I /usr/lib/openmpi/1.4-gcc/include
 CXX = mpicxx
@@ -71,11 +71,46 @@ endif
 endif
 endif
 EXECUTABLE = $(BUILD_DIR)/bbtandem
+# end MPI build (X!!Tandem)
+endif
 
-else
+ifneq ("$(XTGPU)","")
+# our GPU-enabled X!tandem build, tandem-g
+XVARIANT = _xgpu_
+EXECUTABLE = $(BUILD_DIR)/tandem-g
+
+NVCC_WARNINGS = --compiler-options -Wall
+#NVCC_WARNINGS = --compiler-options -Wall --compiler-options -Werror
+
+
+
+# TODO: autodetect this
+NVCC_TARGET = --machine 64
+#NVCC_TARGET = -arch compute_11 -code compute_11
+
+NVCC_DEBUG = -g
+NVCC_PROFILE = -pg
+
+# (Tip: add -keep to preserve intermediate files (.cu.cpp, .ptx, etc) during development)
+
+NVCC=nvcc $(NVCC_DEBUG) $(NVCC_PROFILE)  $(NVCC_WARNINGS) $(NVCC_TARGET) $(CCOPT) $(INCLUDE)
+NVCC_LIBS=-L/usr/local/cuda/lib -lcuda -lcublas -lcudart
+LINKCC = $(CXX)
+endif
+# (end of GPU build)
+
+
+ifeq ("$(XTGPU)$(XBANGBANG)","")
+# normal TPP X!Tandem build
 LINKCC = $(CXX)
 endif
 
+
+ifeq "$(XVARIANT)" "_xgpu_"
+XVARIANT_CC=$(NVCC)
+else
+XVARIANT_CC=$(CXX)
+endif
 
 
 .SUFFIXES:	.o .cpp
@@ -84,7 +119,15 @@ OBJCLASS = $(ARCH)$(XVARIANT)
 
 SRCS := $(wildcard *.cpp)
 OBJS := $(patsubst %.cpp,$(OBJCLASS)%.o,$(wildcard *.cpp))
+
+# add additinal GPU files
+ifeq "$(XVARIANT)" "_xgpu_"
+SRCS += $(wildcard *.cu)
+OBJS += $(patsubst %.cu,$(OBJCLASS)%.o,$(wildcard *.cu))
+endif
+
 DEPS := $(patsubst %.o,%.d,$(OBJS))
+
 
 all: $(EXECUTABLE) $(SUPPORTFILES)
 
@@ -108,13 +151,24 @@ $(BUILD_DIR)/taxonomy.xml: ../bin/taxonomy.xml
 #these components are defined as dependencies; that is they must be up-to-date before the code is linked
 
 $(EXECUTABLE): $(DEPS) $(OBJS) $(GZSTREAMLIB) $(PWIZ_LIBS) $(USER_OBJS)
-	$(LINKCC) $(CXXFLAGS) -o $(EXECUTABLE) $(OBJS)  $(PWIZ_LIBS)  $(LDFLAGS) $(GZSTREAMLIB) $(ZLIB_LIB) $(USER_OBJS)
+	$(LINKCC) $(CXXFLAGS) -o $(EXECUTABLE) $(OBJS) $(PWIZ_LIBS)  $(LDFLAGS) $(GZSTREAMLIB) $(ZLIB_LIB) $(USER_OBJS) $(NVCC_LIBS)
 
 #specify the dep files depend on the cpp files
 
 $(OBJCLASS)%.d: %.cpp
 	$(CXX) -M $(CXXFLAGS) $< > $@
 	$(CXX) -M $(CXXFLAGS) $< | sed s/\\.o/.d/ > $@
+
+$(OBJCLASS)%.d: %.cu
+	$(NVCC) -M $(CXXFLAGS) $< > $@
+	$(NVCC) -M $(CXXFLAGS) $< | sed s/\\.o/.d/ > $@
+
+$(OBJCLASS)mscore_kgpu.o: mscore_kgpu.cpp
+	$(XVARIANT_CC) $(CXXFLAGS) -c -o $@ $<
+
+$(OBJCLASS)mscore_kgpu_thrust.o: mscore_kgpu_thrust.cu
+	$(XVARIANT_CC) $(CXXFLAGS) -c -o $@ $<
+
 
 $(OBJCLASS)%.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
