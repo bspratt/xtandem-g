@@ -36,7 +36,13 @@ LDFLAGS = -static -static-libstdc++
 else
 LDFLAGS = -lpthread
 endif
-LDFLAGS += -L/usr/lib -L/sw/lib -lm $(EXPAT_LIB) $(ZLIB_LIB)
+
+LDFLAGS += -L/usr/lib
+ifeq (exists, $(shell [ -d /sw/lib ] ) && echo exists )
+LDFLAGS += -L/sw/lib
+endif
+
+LDFLAGS += -lm $(EXPAT_LIB) $(ZLIB_LIB)
 
 # building for MPI (X!!Tandem)?
 ifneq ("$(XBANGBANG)","")
