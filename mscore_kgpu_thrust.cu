@@ -1,3 +1,5 @@
+// -*- mode: c++ -*-
+
 /*
  * Copyright (c) 2012 Insilicos LLC
  *
