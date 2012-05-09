@@ -161,6 +161,14 @@ $(EXECUTABLE): $(DEPS) $(OBJS) $(GZSTREAMLIB) $(PWIZ_LIBS) $(USER_OBJS)
 
 #specify the dep files depend on the cpp files
 
+$(OBJCLASS)mscore_kgpu.d: mscore_kgpu.cpp
+	$(XVARIANT_CC) -M $(CXXFLAGS) $< > $@
+	$(XVARIANT_CC) -M $(CXXFLAGS) $< | sed s/\\.o/.d/ > $@
+
+$(OBJCLASS)mscore_kgpu_thrust.d: mscore_kgpu_thrust.cu
+	$(XVARIANT_CC) -M $(CXXFLAGS) $< > $@
+	$(XVARIANT_CC) -M $(CXXFLAGS) $< | sed s/\\.o/.d/ > $@
+
 $(OBJCLASS)%.d: %.cpp
 	$(CXX) -M $(CXXFLAGS) $< > $@
 	$(CXX) -M $(CXXFLAGS) $< | sed s/\\.o/.d/ > $@
@@ -168,6 +176,9 @@ $(OBJCLASS)%.d: %.cpp
 $(OBJCLASS)%.d: %.cu
 	$(NVCC) -M $(CXXFLAGS) $< > $@
 	$(NVCC) -M $(CXXFLAGS) $< | sed s/\\.o/.d/ > $@
+
+
+
 
 $(OBJCLASS)mscore_kgpu.o: mscore_kgpu.cpp
 	$(XVARIANT_CC) $(CXXFLAGS) -c -o $@ $<
