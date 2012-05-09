@@ -148,6 +148,8 @@ mplugin* mscorefactory_kgpu::create_plugin()
     return new mscore_kgpu();
 }
 
+
+
 mscore_kgpu::mscore_kgpu(void) : mscore_k(), m_preloading(false), m_cached_sequences_i(NULL)
 {
     clear();
@@ -252,6 +254,17 @@ bool mscore_kgpu::fakeProcess_create_score(const mprocess *_parentProcess,bool _
     }
     return true;
 }
+
+
+void mscore_kgpu::assert_consistency() {
+#ifdef _DEBUG
+  assert(m_current_playback_sequence_end <= (int)m_cached_sequences_l.size());
+  assert(m_current_playback_sequence < (int)m_mscore_internals_cache.size());
+  assert(m_current_playback_sequence < (int)m_cached_sequences_index.size());
+#endif
+}
+
+
 
 
 /*
@@ -447,3 +460,25 @@ CUDA_TIMER_STOP(tDotKGPU)
     }
 }
 
+
+mscore_kgpu::mscore_internals_cacheinfo::mscore_internals_cacheinfo(int sequence_length, double seqMH, int lId,  
+								    float fMinMass, float fMaxMass,
+								    unsigned long lMaxPeaks, long lMaxCharge,
+								    const char *seq_p, float *fseq_p,unsigned long *lseq_p, 
+								    const unsigned long *plCount,
+								    const float *pfScore, // convolute score information, indexed using the mscore_type_a enum
+								    unsigned long lType
+								    ) : 
+  m_lSeqLength(sequence_length),m_seqMH(seqMH),
+  m_lId(lId), 
+  m_fMinMass(fMinMass), m_fMaxMass(fMaxMass),
+  m_lMaxPeaks(lMaxPeaks), m_lMaxCharge(lMaxCharge),
+  m_sequence(seq_p?seq_p:""), m_lType(lType)
+{
+  m_fseq.resize(m_sequence.size());
+  memmove(&m_fseq[0],fseq_p,sizeof(float)*m_fseq.size());
+  m_lseq.resize(m_sequence.size());
+  memmove(&m_lseq[0],lseq_p,sizeof(unsigned long)*m_lseq.size());
+  memmove(m_plCount,plCount,16*sizeof(long));
+  memmove(m_pfScore,pfScore,16*sizeof(float));
+}

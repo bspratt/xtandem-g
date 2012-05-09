@@ -34,10 +34,9 @@ class mscore_kgpu : public mscore_k
 #ifdef HAVE_MULTINODE_TANDEM // support for Hadoop and/or MPI?
   friend class boost::serialization::access;
   template<class Archive>
-  void serialize(Archive &ar, const unsigned int version)
-    {
-      ar & boost::serialization::base_object<mscore_k>(*this);
-    }
+  void serialize(Archive &ar, const unsigned int version) {
+    ar & boost::serialization::base_object<mscore_k>(*this);
+  }
 #endif // HAVE_MULTINODE_TANDEM
 protected:
     friend class mscorefactory_kgpu;
@@ -53,7 +52,7 @@ public:
     virtual ~mscore_kgpu(void);
 
 public: // inherit anything we don't cuda-ize
-   	virtual bool load_next(const mprocess *_parentProcess); 
+    virtual bool load_next(const mprocess *_parentProcess); 
     virtual void prescore(const size_t _i);
     virtual double dot(unsigned long *_v); // this is where the real scoring happens
     virtual bool add_mi(mspectrum &_s);
@@ -63,23 +62,17 @@ public: // inherit anything we don't cuda-ize
     bool m_preloading;
     virtual bool load_seq(const unsigned long _t,const long _c);
 protected:
-	virtual bool add_A(const unsigned long _t,const long _c);
-	virtual bool add_B(const unsigned long _t,const long _c);
-	virtual bool add_C(const unsigned long _t,const long _c);
-	virtual bool add_Y(const unsigned long _t,const long _c);
-	virtual bool add_X(const unsigned long _t,const long _c);
-	virtual bool add_Z(const unsigned long _t,const long _c);
+    virtual bool add_A(const unsigned long _t,const long _c);
+    virtual bool add_B(const unsigned long _t,const long _c);
+    virtual bool add_C(const unsigned long _t,const long _c);
+    virtual bool add_Y(const unsigned long _t,const long _c);
+    virtual bool add_X(const unsigned long _t,const long _c);
+    virtual bool add_Z(const unsigned long _t,const long _c);
     // for lookahead in mscore::load_next
     bool m_FakeProcess_bPermute;
     bool m_FakeProcess_bPermuteHigh;
     bool fakeProcess_create_score(const mprocess *_parentProcess,bool _p);
-    inline void assert_consistency() {
-#ifdef _DEBUG
-        assert(m_current_playback_sequence_end <= (int)m_cached_sequences_l.size());
-        assert(m_current_playback_sequence < (int)m_mscore_internals_cache.size());
-        assert(m_current_playback_sequence < (int)m_cached_sequences_index.size());
-#endif
-    }
+    inline void assert_consistency(); // no effect unless _DEBUG is defined
     void clear_sequence_cache();
     void cache_sequence();
     bool playback_sequence();
@@ -90,6 +83,7 @@ protected:
     int m_current_playback_sequence_end;
     pinned_host_vector_int_t m_cached_sequences_l;
     thrust::device_vector<int> *m_cached_sequences_i;
+
     class mscore_internals_cacheinfo {
     public:
         mscore_internals_cacheinfo(){};
@@ -99,21 +93,7 @@ protected:
             const char *seq_p, float *fseq_p,unsigned long *lseq_p, 
             const unsigned long *plCount,
         	const float *pfScore, // convolute score information, indexed using the mscore_type_a enum
-            unsigned long lType
-                       ) : 
-          m_lSeqLength(sequence_length),m_seqMH(seqMH),
-          m_lId(lId), 
-          m_fMinMass(fMinMass), m_fMaxMass(fMaxMass),
-          m_lMaxPeaks(lMaxPeaks), m_lMaxCharge(lMaxCharge),
-          m_sequence(seq_p?seq_p:""), m_lType(lType)
-          {
-          m_fseq.resize(m_sequence.size());
-          memmove(&m_fseq[0],fseq_p,sizeof(float)*m_fseq.size());
-          m_lseq.resize(m_sequence.size());
-          memmove(&m_lseq[0],lseq_p,sizeof(unsigned long)*m_lseq.size());
-          memmove(m_plCount,plCount,16*sizeof(long));
-          memmove(m_pfScore,pfScore,16*sizeof(float));
-          };
+            unsigned long lType);
         int m_lSeqLength;
         double m_seqMH; 
         int m_lId;
@@ -124,8 +104,8 @@ protected:
         std::string m_sequence;
         std::vector<float> m_fseq;
         std::vector<long> m_lseq;
-	    unsigned long m_plCount[16];// ion count information, indexed using the mscore_type_a enum
-	    float m_pfScore[16];// convolute score information, indexed using the mscore_type_a enum
+	unsigned long m_plCount[16];// ion count information, indexed using the mscore_type_a enum
+	float m_pfScore[16];// convolute score information, indexed using the mscore_type_a enum
         unsigned long m_lType; // current ion type - value from mscore_type
     };
     std::vector<mscore_internals_cacheinfo *> m_mscore_internals_cache;
