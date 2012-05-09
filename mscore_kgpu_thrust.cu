@@ -460,12 +460,12 @@ void mscore_kgpu_thrust_dot(pinned_host_vector_int_t &lCountsResult,
     size_t nSeqTotal = vsequence_index.size()-1;
     dScoresDev.resize(nSeqTotal);
     lCountsDev.resize(nSeqTotal);
-    for (int spec=0;spec<spectra.size();lastEnd=sequenceCountAfterEachScorePreload[spec++]) {
+    for (int spec=0;spec<(int)spectra.size();lastEnd=sequenceCountAfterEachScorePreload[spec++]) {
         const int *sequence_index = &vsequence_index[lastEnd];
         int nSeq = (sequenceCountAfterEachScorePreload[spec]-lastEnd);
         const vmiTypeGPU &spectrum = *spectra[spec];
         int seq_hits_len = spectrum.iM_max+1; // sequence is trimmed to max spectrum mz
-        if (lcounts.size() < seq_hits_len*nSeq) {
+        if ((int)lcounts.size() < seq_hits_len*nSeq) {
             lcounts.resize((seq_hits_len*nSeq)+1); // need a -1th element for sum diff later
             lcountsscan.resize((seq_hits_len*nSeq)+1); // need a -1th element for sum diff later
             seq_hits.resize(seq_hits_len*nSeq);

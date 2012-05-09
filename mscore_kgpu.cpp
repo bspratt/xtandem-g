@@ -305,7 +305,7 @@ bool mscore_kgpu::playback_sequence() {
     assert_consistency(); // no effect in release build
     restore_mscore_internals(++m_current_playback_sequence);
     m_current_playback_sequence_begin = m_cached_sequences_index[m_current_playback_sequence];
-    m_current_playback_sequence_end = ((m_current_playback_sequence+1)==m_cached_sequences_index.size())?
+    m_current_playback_sequence_end = ((m_current_playback_sequence+1)==(int)m_cached_sequences_index.size())?
         m_cached_sequences_l.size():
         m_cached_sequences_index[m_current_playback_sequence+1];
    int len = (m_current_playback_sequence_end-m_current_playback_sequence_begin);
