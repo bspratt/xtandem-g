@@ -48,7 +48,10 @@ std::string prettymem(size_t bytes) {
 
 // logging stuff, stolen from FastPass project
 enum LogType {logall, debug, info, warn, error, lognone};
-enum EventType {noevent, init, initok, hostalloc, hostrelease, hostreleaseok, hostallocok, devicealloc, devicerelease, devicereleaseok, deviceallocok, parse, parseok, copye, copyok, kernel, kernelok, file, fileok};
+enum EventType {
+  noevent, init, initok, hostalloc, hostrelease, hostreleaseok, 
+  hostallocok, devicealloc, devicerelease, devicereleaseok, deviceallocok, 
+  parse, parseok, copye, copyok, kernel, kernelok, file, fileok};
 
 // ug, better design is wanted here
 static LogType logLevel=debug;
@@ -74,7 +77,8 @@ mplugin* mscorefactory_kgpu::create_plugin()
         // initialize GPU
         int deviceCount = 0;
         int bestDeviceIndex = 0;
-        double highestDeviceScore = 0.0;  // device score = clockRate * multiProcessorCount
+        double highestDeviceScore = 0.0;  // device score = clockRate
+					  // * multiProcessorCount
         cudaDeviceProp deviceProp;
 
         cuInit(0);
@@ -88,61 +92,102 @@ mplugin* mscorefactory_kgpu::create_plugin()
         }
         logevent(info, init, "GPU devices found: " << deviceCount << endl);
 
-        for (int curDeviceNumber=0; curDeviceNumber < deviceCount; curDeviceNumber++) {
+        for (int curDeviceNumber=0; 
+	     curDeviceNumber < deviceCount; 
+	     curDeviceNumber++) {
             logevent(info, init, "testing device " << curDeviceNumber << endl);
             memset(&deviceProp, 0, sizeof(deviceProp));
-            if (cudaSuccess == cudaGetDeviceProperties(&deviceProp, curDeviceNumber)) {
-                double curDeviceScore = deviceProp.multiProcessorCount * deviceProp.clockRate;
+            if (cudaSuccess == cudaGetDeviceProperties(
+		  &deviceProp, curDeviceNumber)) {
+	      double curDeviceScore = 
+		deviceProp.multiProcessorCount * deviceProp.clockRate;
                 if (curDeviceScore > highestDeviceScore) {
                     highestDeviceScore = curDeviceScore;
                     bestDeviceIndex = curDeviceNumber;
                 }
             }
             else {
-                logevent(error, init, "unable to access GPU properites, using non-GPU k-score" << endl);
+                logevent(
+		  error, 
+		  init, 
+		  "unable to access GPU properites, using non-GPU k-score" 
+		    << endl);
+
                 return new mscore_k();
             }
         }
 
         memset(&deviceProp, 0, sizeof(deviceProp));
-        if (cudaSuccess == cudaGetDeviceProperties(&deviceProp, bestDeviceIndex)) {
-            logevent(info, init, "Using GPU device " << bestDeviceIndex << ": \"" << deviceProp.name << "\", "<< prettymem(deviceProp.totalGlobalMem) << ", " << deviceProp.multiProcessorCount << " multiprocessors, " << deviceProp.clockRate/1000 << " MHz" << endl);
+        if (cudaSuccess == 
+	      cudaGetDeviceProperties(&deviceProp, bestDeviceIndex)) {
+            logevent(
+	      info,
+	      init, 
+	      "Using GPU device " << bestDeviceIndex << ": \"" 
+	        << deviceProp.name << "\", "
+	        << prettymem(deviceProp.totalGlobalMem) << ", " 
+	        << deviceProp.multiProcessorCount << " multiprocessors, " 
+	        << deviceProp.clockRate/1000 << " MHz" << endl);
             size_t free_mem, total_mem;
             cudaMemGetInfo(&free_mem, &total_mem);
             m_initialFreeMemory = free_mem;
-            logevent(info, init, "device initial free memory: " << prettymem(m_initialFreeMemory) << endl);
+            logevent(
+	      info,
+	      init, 
+	      "device initial free memory: " << prettymem(m_initialFreeMemory) 
+	        << endl);
         }
         else {
-            logevent(error, init, "unable to access device properites, using non-GPU k-score" << endl);
+            logevent(
+	      error, 
+	      init, 
+	      "unable to access device properites, using non-GPU k-score" 
+	        << endl);
             return new mscore_k();
         }      
 
         logevent(info, init, "resetting GPU" << endl);
         if (cudaSuccess != cudaDeviceReset() ) {
-            logevent(error, init, "error resetting GPU, using non-GPU k-score" << endl);
+            logevent(
+	      error,
+	      init, 
+	      "error resetting GPU, using non-GPU k-score" << endl);
             return new mscore_k();
         }
         logevent(info, initok, "done resetting GPU" << endl);
 
         if (cudaSuccess != cudaSetDevice(bestDeviceIndex)) {
-            logevent(error, init, "Error - cannot set GPU, using non-GPU k-score"  << endl);
+            logevent(
+	      error, 
+	      init, 
+	      "Error - cannot set GPU, using non-GPU k-score"  << endl);
             return new mscore_k();
         }
         else {
-            logevent(info, initok, "GPU " << bestDeviceIndex << " initialized." << endl);
+            logevent(
+	      info, 
+	      initok, 
+	      "GPU " << bestDeviceIndex << " initialized." << endl);
         }
         size_t free, total;
         free = total = 0;
         cudaMemGetInfo(&free, &total);
         m_initialFreeMemory = total;
-        logevent(info, init, "Device memory: " << prettymem(free) << " free / " << prettymem(m_initialFreeMemory) << " total" << endl);
+        logevent(
+	  info, 
+	  init, 
+	  "Device memory: " << prettymem(free) << " free / " 
+	    << prettymem(m_initialFreeMemory) << " total" << endl);
         if (m_initialFreeMemory) {
             mscore_kgpu_thrust_init();
         }
 
     }
     if (!m_initialFreeMemory) {
-        logevent(error, init, "Error - insufficient GPU memory, using non-GPU k-score" << endl);
+        logevent(
+	  error, 
+	  init, 
+	  "Error - insufficient GPU memory, using non-GPU k-score" << endl);
         return new mscore_k();
     }
     return new mscore_kgpu();
@@ -194,13 +239,21 @@ bool mscore_kgpu::load_next(const mprocess *_parentProcess) {
         clear_sequence_cache();
         m_vSpectraToScore.clear();
         m_preloading = true;
-        while (mscore_k::load_next(_parentProcess)) { // lookahead so we can gang up dot() work
-            // mimic the calling mprocess object and play back the m_pScore behavior later
+        while (mscore_k::load_next(_parentProcess) // lookahead so we
+						   // can gang up
+						   // dot() work
+	       ) {  
+
+	    // mimic the calling mprocess object and play back the m_pScore behavior later
             m_cached_mscorestates.push_back(m_State);
             m_FakeProcess_bPermute = false;
             m_FakeProcess_bPermuteHigh = false;
-            fakeProcess_create_score(_parentProcess,true); // may alter m_fakeProcess_bPermute*
-            if(m_FakeProcess_bPermute && _parentProcess->m_bCrcCheck || m_FakeProcess_bPermuteHigh)	{
+
+	    // may alter m_fakeProcess_bPermute*
+            fakeProcess_create_score(_parentProcess,true);
+            if(m_FakeProcess_bPermute && 
+	        _parentProcess->m_bCrcCheck || 
+	        m_FakeProcess_bPermuteHigh)	{
                 reset_permute();
                 while(permute())	{
                     fakeProcess_create_score(_parentProcess,false);
@@ -211,7 +264,9 @@ bool mscore_kgpu::load_next(const mprocess *_parentProcess) {
         
         if (m_cached_sequences_index.size()) {
             //  push to device memory
-            m_cached_sequences_i = mscore_kgpu_thrust_host_to_device_copy(m_cached_sequences_l,m_cached_sequences_i);
+            m_cached_sequences_i = mscore_kgpu_thrust_host_to_device_copy(
+				     m_cached_sequences_l,
+				     m_cached_sequences_i);
         }
 
         // and prepare to play back
@@ -228,29 +283,42 @@ bool mscore_kgpu::load_next(const mprocess *_parentProcess) {
     return false;
 }
 
-// mimic the salient parts of calling mprocess create_score() for lookahead purposes
-bool mscore_kgpu::fakeProcess_create_score(const mprocess *_parentProcess,bool _p) {
+// mimic the salient parts of calling mprocess create_score() for
+// lookahead purposes
+bool mscore_kgpu::fakeProcess_create_score(
+  const mprocess *_parentProcess,
+  bool _p) {
 	size_t a = 0;
 	long lCount = 0;
 /*
- * score each mspectrum identified as a candidate in the m_pScore->m_State object
+ * score each mspectrum identified as a candidate in the
+ * m_pScore->m_State object
  */
-	while(lCount < m_State.m_lEqualsS)	{
-		a = m_State.m_plEqualsS[lCount];
-		lCount++;
-/*
-* this check is needed to keep tandem consistent whether running on
-* single-threaded, multi-threaded or on a cluster.  otherwise, when
-* there are multiple spectra matching a sequence (which is more common
-* the fewer mprocess objects there are) one can cause others to score
-* more permutation sequences.
-*/
-		if (!_p && _parentProcess->m_vSpectra[a].m_hHyper.m_ulCount >= 400)  // TODO make this magic number a #define shared with mprocess
-			continue;
-		m_lMaxCharge = (long)(_parentProcess->m_vSpectra[a].m_fZ+0.1);
-		score(a);
-        m_sequenceCountAfterEachScorePreload.push_back(m_cached_sequences_index.size());
-        m_currentSpectra.push_back(&m_vSpectraGPU[m_lId]);    
+	while(lCount < m_State.m_lEqualsS) {
+	  a = m_State.m_plEqualsS[lCount];
+	  lCount++;
+
+	  
+	  // this check is needed to keep tandem consistent whether
+	  // running on single-threaded, multi-threaded or on a
+	  // cluster.  otherwise, when there are multiple spectra
+	  // matching a sequence (which is more common the fewer
+	  // mprocess objects there are) one can cause others to score
+	  // more permutation sequences:
+	  if (!_p && 
+	        _parentProcess->m_vSpectra[a].m_hHyper.m_ulCount 
+		  >=
+		400 // TODO make this magic number (400) a #define
+		    // shared with mprocess
+	      ) {
+	    continue;
+	  }
+
+	  m_lMaxCharge = (long)(_parentProcess->m_vSpectra[a].m_fZ+0.1);
+	  score(a);
+	  m_sequenceCountAfterEachScorePreload.push_back(
+	    m_cached_sequences_index.size());
+	  m_currentSpectra.push_back(&m_vSpectraGPU[m_lId]);    
     }
     return true;
 }
@@ -292,10 +360,17 @@ void mscore_kgpu::cache_sequence() {
 
     // jam sequence info into contiguous memory for cheap transfer to device
     int seqlen;
-    // get length of new sequence, ignore any members greater than max spectrum mz
-    for (seqlen=0 ; m_plSeq[seqlen] && (m_plSeq[seqlen] <= (unsigned long)m_vSpectraGPU[m_lId].iM_max); seqlen++); 
+
+    // get length of new sequence, ignore any members greater than max
+    // spectrum mz
+    for (seqlen=0;
+	 m_plSeq[seqlen] && 
+	   (m_plSeq[seqlen] <= (unsigned long)m_vSpectraGPU[m_lId].iM_max);
+	 seqlen++);
+ 
     int prev_end=m_cached_sequences_l.size(); // note end of list
-    m_cached_sequences_index.push_back(prev_end); // note where to find new sequence
+    m_cached_sequences_index.push_back(prev_end); // note where to
+						  // find new sequence
     m_cached_sequences_l.resize(m_cached_sequences_l.size()+seqlen);
     memmove(&m_cached_sequences_l[prev_end],&m_plSeq[0],seqlen*sizeof(long));
     assert_consistency(); // no effect in release build
@@ -304,12 +379,22 @@ void mscore_kgpu::cache_sequence() {
 bool mscore_kgpu::playback_sequence() {
     assert_consistency(); // no effect in release build
     restore_mscore_internals(++m_current_playback_sequence);
-    m_current_playback_sequence_begin = m_cached_sequences_index[m_current_playback_sequence];
-    m_current_playback_sequence_end = ((m_current_playback_sequence+1)==(int)m_cached_sequences_index.size())?
-        m_cached_sequences_l.size():
-        m_cached_sequences_index[m_current_playback_sequence+1];
+
+    m_current_playback_sequence_begin = 
+      m_cached_sequences_index[m_current_playback_sequence];
+
+    m_current_playback_sequence_end = 
+      ((m_current_playback_sequence+1)==(int)m_cached_sequences_index.size())
+        ?
+      m_cached_sequences_l.size() :
+      m_cached_sequences_index[m_current_playback_sequence+1];
+
    int len = (m_current_playback_sequence_end-m_current_playback_sequence_begin);
-    memmove(&m_plSeq[0],&m_cached_sequences_l[m_current_playback_sequence_begin], len*sizeof(long));
+   
+   memmove(
+      &m_plSeq[0],
+      &m_cached_sequences_l[m_current_playback_sequence_begin], 
+      len*sizeof(long));
     m_plSeq[len] = 0;
     assert_consistency(); // no effect in release build
     return true;
@@ -374,12 +459,14 @@ bool mscore_kgpu::add_mi(mspectrum &_s)
     if (!mscore::add_mi(_s))
         return false;
 
-    if (&_s == m_vSpectraToScore.back()) { // last in list, transfer all to device memory in one go
-CUDA_TIMER_START(mi_time);
-        size_t a, n_pairs=0;
-        for (a=0;a < m_vSpectraToScore.size();a++)	{
-            n_pairs += m_vSpectraToScore[a]->m_vMI.size();
-        }
+    if (&_s == m_vSpectraToScore.back()) { // last in list, transfer
+					   // all to device memory in
+					   // one go
+        CUDA_TIMER_START(mi_time);
+	size_t a, n_pairs=0;
+	for (a=0;a < m_vSpectraToScore.size();a++)	{
+	  n_pairs += m_vSpectraToScore[a]->m_vMI.size();
+	}
         pinned_host_vector_float_t fM(n_pairs);
         pinned_host_vector_float_t fI(n_pairs);
         n_pairs = 0;
@@ -405,15 +492,27 @@ CUDA_TIMER_START(mi_time);
             {
                // Screen peeks on upper end.
                 int iWindowCount = 10;
-                int endMassMax = (int)(((_s.m_dMH + (_s.m_fZ - 1) * m_seqUtil.m_dProton) / _s.m_fZ) * 2.0 + 0.5) + iWindowCount;
+                int endMassMax = (int)(
+		    ((_s.m_dMH + (_s.m_fZ - 1) * m_seqUtil.m_dProton) / _s.m_fZ) 
+		      * 
+		    2.0 + 0.5)
+		  + 
+		    iWindowCount;
 
                 // now pass off to CUDA implementation
-                mscore_kgpu_thrust_score(dfM.begin()+n_pairs,dfI.begin()+n_pairs,_s.m_vMI.size(),m_dIsotopeCorrection,iWindowCount,endMassMax,m_maxEnd,vTypeGPU); // results come back in vTypeGPU
+                mscore_kgpu_thrust_score(
+		  dfM.begin()+n_pairs,
+		  dfI.begin()+n_pairs,_s.m_vMI.size(),
+		  m_dIsotopeCorrection,
+		  iWindowCount,
+		  endMassMax,
+		  m_maxEnd,
+		  vTypeGPU); // results come back in vTypeGPU
             }
             m_vSpectraGPU.push_back(vTypeGPU);
             n_pairs += _s.m_vMI.size();
         }
-CUDA_TIMER_STOP(mi_time)
+	CUDA_TIMER_STOP(mi_time)
     }
     return true;
 
@@ -439,36 +538,50 @@ double mscore_kgpu::dot(unsigned long *_v)
     if (m_preloading) {
         return 0.0;  // not yet, still loading spectra
     } else {
-        assert_consistency(); // no effect in release build
- CUDA_TIMER_START(tDotKGPU)
-        // turns repeated dot() calls into one grand call
-        if (!m_current_playback_sequence_begin) { // first time here since cache reset?
-            m_dScores.resize(m_cached_sequences_index.size());
-            m_lCounts.resize(m_cached_sequences_index.size());
-            m_cached_sequences_index.push_back(m_cached_sequences_l.size()); // note end
-            mscore_kgpu_thrust_dot(m_lCounts,m_dScores,m_currentSpectra,
-                m_sequenceCountAfterEachScorePreload,
-                *m_cached_sequences_i,
-                m_cached_sequences_index);
-        }
+      assert_consistency(); // no effect in release build
+      CUDA_TIMER_START(tDotKGPU);
+      // turns repeated dot() calls into one grand call
+      if (!m_current_playback_sequence_begin) { // first time here
+						// since cache reset?
+	  m_dScores.resize(m_cached_sequences_index.size());
+	  m_lCounts.resize(m_cached_sequences_index.size());
 
-STDVECT(unsigned long,foov,m_lCounts) ;
-STDVECT(float,food,m_dScores) ;
-        *_v = (unsigned long)m_lCounts[m_current_playback_sequence];
-CUDA_TIMER_STOP(tDotKGPU)
-        return m_dScores[m_current_playback_sequence];
+	  // note end
+	  m_cached_sequences_index.push_back(m_cached_sequences_l.size());
+
+	  mscore_kgpu_thrust_dot(
+	    m_lCounts,
+	    m_dScores,
+	    m_currentSpectra,
+	    m_sequenceCountAfterEachScorePreload,
+	    *m_cached_sequences_i,
+	    m_cached_sequences_index);
+      }
+      
+      STDVECT(unsigned long,foov,m_lCounts) ;
+      STDVECT(float,food,m_dScores) ;
+      *_v = (unsigned long)m_lCounts[m_current_playback_sequence];
+      CUDA_TIMER_STOP(tDotKGPU);
+      return m_dScores[m_current_playback_sequence];
     }
 }
 
 
-mscore_kgpu::mscore_internals_cacheinfo::mscore_internals_cacheinfo(int sequence_length, double seqMH, int lId,  
-								    float fMinMass, float fMaxMass,
-								    unsigned long lMaxPeaks, long lMaxCharge,
-								    const char *seq_p, float *fseq_p,unsigned long *lseq_p, 
-								    const unsigned long *plCount,
-								    const float *pfScore, // convolute score information, indexed using the mscore_type_a enum
-								    unsigned long lType
-								    ) : 
+mscore_kgpu::mscore_internals_cacheinfo::mscore_internals_cacheinfo(
+  int sequence_length, 
+  double seqMH, 
+  int lId,  
+  float fMinMass, 
+  float fMaxMass,
+  unsigned long lMaxPeaks, 
+  long lMaxCharge,
+  const char *seq_p, 
+  float *fseq_p,
+  unsigned long *lseq_p, 
+  const unsigned long *plCount,
+  const float *pfScore, // convolute score information, indexed using
+			// the mscore_type_a enum
+  unsigned long lType) : 
   m_lSeqLength(sequence_length),m_seqMH(seqMH),
   m_lId(lId), 
   m_fMinMass(fMinMass), m_fMaxMass(fMaxMass),

@@ -1,3 +1,5 @@
+// -*- mode: c++ -*-
+
 /*
  * Copyright (c) 2012 Insilicos LLC
  *
@@ -29,11 +31,26 @@
 
 #include "mspectrum.h"
 
-typedef thrust::host_vector<float,thrust::experimental::cuda::pinned_allocator<float> > pinned_host_vector_float_t;
-typedef thrust::host_vector<int,thrust::experimental::cuda::pinned_allocator<int> > pinned_host_vector_int_t;
+typedef thrust::host_vector<
+    float,
+    thrust::experimental::cuda::pinned_allocator<float> 
+  > pinned_host_vector_float_t;
+
+typedef thrust::host_vector<
+    int,
+    thrust::experimental::cuda::pinned_allocator<int> 
+  > pinned_host_vector_int_t;
 
 
-class cudatimer {public: cudaEvent_t start;cudaEvent_t stop;float elapsed; float count; float period; cudatimer():elapsed(0),count(0),period(1000){}};
+class cudatimer {
+ public: 
+  cudaEvent_t start;
+  cudaEvent_t stop;
+  float elapsed;
+  float count;
+  float period;
+ cudatimer() : elapsed(0),count(0),period(1000) { }
+};
 
 #if 1 || defined(PROFILE)
 #define CUDA_TIMER_DECL(tvar)
@@ -42,15 +59,31 @@ class cudatimer {public: cudaEvent_t start;cudaEvent_t stop;float elapsed; float
 #define myassert(expr) 
 #else
 #define CUDA_TIMER_DECL(tvar) cudatimer tvar;
-#define CUDA_TIMER_START(tvar) cudaEventCreate(&tvar.start); cudaEventCreate(&tvar.stop); cudaEventRecord( tvar.start, 0 );
-#define CUDA_TIMER_STOP(tvar) cudaEventRecord( tvar.stop, 0 ); cudaEventSynchronize( tvar.stop ); {float t;cudaEventElapsedTime( &t, tvar.start, tvar.stop ); tvar.elapsed+=t;}if (!(((int)++tvar.count)%((int)tvar.period))) std::cout << "t("<<#tvar<<")="<<tvar.elapsed/(tvar.count)<<"ms avg\n";cudaEventDestroy( tvar.start ); cudaEventDestroy( tvar.stop );
-#define myassert(expr) if (!(expr)) {std::cerr<<"assert failed at "<< __FILE__<<":"<<__LINE__<<", "<< #expr <<"\n";exit(1);}
+#define CUDA_TIMER_START(tvar)      \
+  cudaEventCreate(&tvar.start);	    \
+  cudaEventCreate(&tvar.stop);      \
+  cudaEventRecord( tvar.start, 0 );
+
+#define CUDA_TIMER_STOP(tvar) \
+  cudaEventRecord( tvar.stop, 0 ); \
+  cudaEventSynchronize( tvar.stop ); \
+  {float t;cudaEventElapsedTime( &t, tvar.start, tvar.stop ); tvar.elapsed+=t;} \
+  if (!(((int)++tvar.count)%((int)tvar.period))) \
+    std::cout << "t("<<#tvar<<")="<<tvar.elapsed/(tvar.count)<<"ms avg\n"; \
+  cudaEventDestroy( tvar.start ); cudaEventDestroy( tvar.stop ); \
+
+#define myassert(expr) \
+  if (!(expr))								\
+    {std::cerr<<"assert failed at "<< __FILE__<<":"<<__LINE__<<", " \
+	      << #expr <<"\n";exit(1);}
 #endif
 
 
 // helpful macro for copying to c++ space for debugger viewing
 #ifdef _DEBUG
-#define STDVECT(T,local,mem)  std::vector<T> local;for (size_t nn=0;nn<mem.size();)local.push_back(mem[nn++]);
+#define STDVECT(T,local,mem)  \
+  std::vector<T> local; \
+  for (size_t nn=0;nn<mem.size();)local.push_back(mem[nn++]);
 #else
 #define STDVECT(T,local,mem) 
 #endif
@@ -62,18 +95,28 @@ thrust::device_vector<float> *mscore_kgpu_thrust_fvec_alloc(int size);
 void mscore_kgpu_thrust_fvec_clear(thrust::device_vector<float> *vec);
 void mscore_kgpu_thrust_fvec_kill(thrust::device_vector<float> *vec);
 void mscore_kgpu_thrust_ivec_kill(thrust::device_vector<int> *vec);
-thrust::device_vector<int> *mscore_kgpu_thrust_host_to_device_copy(const pinned_host_vector_int_t &host_src,thrust::device_vector<int> *device_dest);
-void mscore_kgpu_thrust_host_to_device_copy_float(const pinned_host_vector_float_t &host_src,thrust::device_vector<float> &device_dest);
-void mscore_kgpu_thrust_device_to_host_copy_float(const thrust::device_vector<float> &device_src,pinned_host_vector_float_t &host_dest);
-void mscore_kgpu_thrust_device_to_host_copy_int(const thrust::device_vector<int> &device_src,pinned_host_vector_int_t &hhost_dest);
+thrust::device_vector<int> *mscore_kgpu_thrust_host_to_device_copy(
+			      const pinned_host_vector_int_t &host_src,
+			      thrust::device_vector<int> *device_dest);
+void mscore_kgpu_thrust_host_to_device_copy_float(
+  const pinned_host_vector_float_t &host_src,
+  thrust::device_vector<float> &device_dest);
+void mscore_kgpu_thrust_device_to_host_copy_float(
+  const thrust::device_vector<float> &device_src,
+  pinned_host_vector_float_t &host_dest);
+void mscore_kgpu_thrust_device_to_host_copy_int(
+  const thrust::device_vector<int> &device_src,
+  pinned_host_vector_int_t &hhost_dest);
 
 
 struct vmiTypeGPU {
-    // purposefully crude, don't want lots of automatic create destroy copy in std::vector
+  // purposefully crude, don't want lots of automatic create destroy
+  // copy in std::vector
 public:
     thrust::device_vector<int> *iM; // m/z's converted to integer indexes
     int iM_max; // iM->back() in c++ space for cheap access
-    thrust::device_vector<float> *fI; // intensities: for ion=iM[n], intensty=fI[n] 
+    thrust::device_vector<float> *fI; // intensities: for ion=iM[n],
+				      // intensty=fI[n]
     void init(int s);
     void kill();
 };

@@ -1,3 +1,5 @@
+// -*- mode: c++ -*-
+
 /*
  * Copyright (c) 2003-2006 Fred Hutchinson Cancer Research Center
  *
@@ -54,10 +56,12 @@ public:
 public: // inherit anything we don't cuda-ize
     virtual bool load_next(const mprocess *_parentProcess); 
     virtual void prescore(const size_t _i);
-    virtual double dot(unsigned long *_v); // this is where the real scoring happens
+    virtual double dot(unsigned long *_v); // this is where the real
+					   // scoring happens
     virtual bool add_mi(mspectrum &_s);
     virtual bool add_details(mspectrum &_s);
     virtual bool clear();
+
     // stuff for batching up sequence transfers to device memory
     bool m_preloading;
     virtual bool load_seq(const unsigned long _t,const long _c);
@@ -68,6 +72,7 @@ protected:
     virtual bool add_Y(const unsigned long _t,const long _c);
     virtual bool add_X(const unsigned long _t,const long _c);
     virtual bool add_Z(const unsigned long _t,const long _c);
+
     // for lookahead in mscore::load_next
     bool m_FakeProcess_bPermute;
     bool m_FakeProcess_bPermuteHigh;
@@ -92,7 +97,9 @@ protected:
             unsigned long lMaxPeaks, long lMaxCharge,
             const char *seq_p, float *fseq_p,unsigned long *lseq_p, 
             const unsigned long *plCount,
-        	const float *pfScore, // convolute score information, indexed using the mscore_type_a enum
+        	const float *pfScore, // convolute score information,
+				      // indexed using the
+				      // mscore_type_a enum
             unsigned long lType);
         int m_lSeqLength;
         double m_seqMH; 
@@ -104,16 +111,19 @@ protected:
         std::string m_sequence;
         std::vector<float> m_fseq;
         std::vector<long> m_lseq;
-	unsigned long m_plCount[16];// ion count information, indexed using the mscore_type_a enum
-	float m_pfScore[16];// convolute score information, indexed using the mscore_type_a enum
+	unsigned long m_plCount[16]; // ion count information, indexed
+				     // using the mscore_type_a enum
+	float m_pfScore[16]; // convolute score information, indexed
+			     // using the mscore_type_a enum
         unsigned long m_lType; // current ion type - value from mscore_type
     };
     std::vector<mscore_internals_cacheinfo *> m_mscore_internals_cache;
     void save_mscore_internals() {
-        m_mscore_internals_cache.push_back(new mscore_internals_cacheinfo(m_lSeqLength,m_dSeqMH,m_lId,
-            m_fMinMass,m_fMaxMass,m_lMaxPeaks,m_lMaxCharge,m_pSeq,m_pfSeq,m_plSeq,m_plCount,m_pfScore,m_lType
-
-            ));
+        m_mscore_internals_cache.
+	  push_back(new mscore_internals_cacheinfo(
+		      m_lSeqLength, m_dSeqMH,m_lId, m_fMinMass, m_fMaxMass, 
+		      m_lMaxPeaks, m_lMaxCharge, m_pSeq, m_pfSeq, m_plSeq, 
+		      m_plCount, m_pfScore, m_lType));
     }
     void restore_mscore_internals(int n) {
         const mscore_internals_cacheinfo &c=*m_mscore_internals_cache[n];
