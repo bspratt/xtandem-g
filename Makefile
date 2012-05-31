@@ -28,7 +28,7 @@ ESCAPED_TANDEM_PARAMETERS_INSTALL_DIR=$(subst \,\\,$(TANDEM_PARAMETERS_INSTALL_D
 #CXXFLAGS denotes flags for the C++ compiler
 
 CXX = g++
-CXXFLAGS = -O2 -DGCC4 -DPLUGGABLE_SCORING $(OSFLAGS) $(ZLIB_INCL) -DREAD_GZIP -DHAVE_ZLIB -DHAVE_MULTINODE_TANDEM -I ../../gzstream $(PWIZ_MZML_FLAGS) 
+CXXFLAGS = -g -DGCC4 -DPLUGGABLE_SCORING $(OSFLAGS) $(ZLIB_INCL) -DREAD_GZIP -DHAVE_ZLIB -I ../../gzstream $(PWIZ_MZML_FLAGS) 
 #CXXFLAGS = -O2 -DGCC -DPLUGGABLE_SCORING -DX_P3  $(ZLIB_INCL)
 ifeq (${OS},Windows_NT)
 # MinGW
@@ -37,6 +37,7 @@ else
 LDFLAGS = -lpthread
 endif
 
+# optional mac os x library location
 LDFLAGS += -L/usr/lib
 ifeq (exists, $(shell [ -d /sw/lib ] ) && echo exists )
 LDFLAGS += -L/sw/lib
@@ -44,66 +45,73 @@ endif
 
 LDFLAGS += -lm $(EXPAT_LIB) $(ZLIB_LIB)
 
-# building for MPI (X!!Tandem)?
+# building multinode version (X!!Tandem)?
 ifneq ("$(XBANGBANG)","")
+EXECUTABLE = $(BUILD_DIR)/bbtandem
 XVARIANT = _xbangbang_
 LINKCC = mpicxx
-CXXFLAGS += -DXBANGBANG
-# MPI: is it mpich2?
+CXXFLAGS += -DXBANGBANG -DHAVE_MULTINODE_TANDEM
+# [multinode] MPI: look for 64-bit mpich2 libraries and headers
 ifneq "$(wildcard /usr/lib64/mpich2/lib/libmpichcxx.a )" ""
 CXXFLAGS += -I /usr/include/mpich2-x86_64
 LDFLAGS += /usr/lib64/mpich2/lib/libmpichcxx.a /usr/lib64/mpich2/lib/libmpich.a
 else
+# [multinode] MPI: look for other mpich2 libraries and headers
 ifneq "$(wildcard /usr/local/mpich2/include )" ""
 CXXFLAGS += -I /usr/local/mpich2/include -I /usr/local/mpich2
 LDFLAGS += /usr/local/mpich2/lib/libmpichcxx.a /usr/local/mpich2/lib/libmpich.a
-else
-# MPI: is it open mpi?
-#   as in StarCluster ubuntu
+else # not using mpich2. look for open mpi
+# [multinode] MPI: look for open mpi headers as in StarCluster ubuntu;
+# if found also use custom compiler
 ifneq "$(wildcard /usr/lib/openmpi/include/mpi.h )" ""
 CXXFLAGS += -I /usr/lib/openmpi/include
 CXX = mpicxx
 endif
-#   as in StarCluster centos
+# [multinode] MPI: look for 64-bit open mpi headers as in StarCluster
+# centos; if found also use custom compiler
 ifneq "$(wildcard /usr/lib64/openmpi/1.4-gcc/include/mpi.h )" ""
 CXXFLAGS += -I /usr/lib64/openmpi/1.4-gcc/include
 CXX = mpicxx
 endif
-#   as in StarCluster centos
+# [multinode] MPI: look for standard open mpi headers as in
+# StarCluster centos; if found also use custom compiler
 ifneq "$(wildcard /usr/lib/openmpi/1.4-gcc/include/mpi.h )" ""
 CXXFLAGS += -I /usr/lib/openmpi/1.4-gcc/include
 CXX = mpicxx
 endif
+endif # end open search (vs mpich2)
 endif
-endif
-EXECUTABLE = $(BUILD_DIR)/bbtandem
-# end MPI build (X!!Tandem)
-endif
+endif # end multinode build (X!!Tandem)
 
+# building our GPU-enabled X!tandem build, tandem-g?
 ifneq ("$(XTGPU)","")
-# our GPU-enabled X!tandem build, tandem-g
 XVARIANT = _xgpu_
 EXECUTABLE = $(BUILD_DIR)/tandem-g
-
 NVCC_WARNINGS = --compiler-options -Wall
-#NVCC_WARNINGS = --compiler-options -Wall --compiler-options -Werror
-
-
+# -Wall disabled for now, due to lots of messy 64-bit warnings and
+# -unused variable in original code; otherwise use:
+# NVCC_WARNINGS = --compiler-options -Wall --compiler-options -Werror
 
 # TODO: autodetect this
 NVCC_TARGET = --machine 64
-#NVCC_TARGET = -arch compute_11 -code compute_11
 
 NVCC_DEBUG = -g
 NVCC_PROFILE = -pg
 
-# (Tip: add -keep to preserve intermediate files (.cu.cpp, .ptx, etc) during development)
+# (Tip: add -keep to NVCC in order to preserve intermediate files
+# (.cu.cpp, .ptx, etc) during development)
 
 NVCC=nvcc $(NVCC_DEBUG) $(NVCC_PROFILE)  $(NVCC_WARNINGS) $(NVCC_TARGET) $(CCOPT) $(INCLUDE)
-NVCC_LIBS=-L/usr/local/cuda/lib -lcuda -lcublas -lcudart
+NVCC_LIBS =-L/usr/local/cuda/lib -lcuda -lcublas -lcudart
+
+# attempt to get rid of "rpath" issue for debugging purposes (os x only)
+ifeq ($(ARCH_FAMILY),darwin)
+NVCC_DEBUG += -Xlinker -rpath -Xlinker /usr/local/cuda/lib 
+endif
+
 LINKCC = $(CXX)
 endif
-# (end of GPU build)
+# (end of GPGPU build)
 
 
 ifeq ("$(XTGPU)$(XBANGBANG)","")
@@ -111,9 +119,11 @@ ifeq ("$(XTGPU)$(XBANGBANG)","")
 LINKCC = $(CXX)
 endif
 
-
+# certain specific files require the GPGPU compiler for GPU builds and
+# use the standard compiler otherwise
 ifeq "$(XVARIANT)" "_xgpu_"
 XVARIANT_CC=$(NVCC)
+LINKCC=$(NVCC)
 else
 XVARIANT_CC=$(CXX)
 endif
@@ -124,13 +134,23 @@ endif
 OBJCLASS = $(ARCH)$(XVARIANT)
 
 SRCS := $(wildcard *.cpp)
-OBJS := $(patsubst %.cpp,$(OBJCLASS)%.o,$(wildcard *.cpp))
+# (make sure GPGPU .cpp files don't get added to the source file list
+# for non GPGPU build variants)
+ifneq "$(XVARIANT)" "_xgpu_"
+SRCS_FILTERED := $(filter-out mscore_kgpu.cpp, $(SRCS))
+SRCS := $(SRCS_FILTERED)
+endif
 
-# add additinal GPU files
+OBJS := $(patsubst %.cpp,$(OBJCLASS)%.o,$(SRCS))
+
+# for GPGPU build variant, add additional GPGPU files, which are always
+# built with the CUDA compiler
 ifeq "$(XVARIANT)" "_xgpu_"
 SRCS += $(wildcard *.cu)
 OBJS += $(patsubst %.cu,$(OBJCLASS)%.o,$(wildcard *.cu))
 endif
+
+
 
 DEPS := $(patsubst %.o,%.d,$(OBJS))
 
@@ -159,36 +179,43 @@ $(BUILD_DIR)/taxonomy.xml: ../bin/taxonomy.xml
 $(EXECUTABLE): $(DEPS) $(OBJS) $(GZSTREAMLIB) $(PWIZ_LIBS) $(USER_OBJS)
 	$(LINKCC) $(CXXFLAGS) -o $(EXECUTABLE) $(OBJS) $(PWIZ_LIBS)  $(LDFLAGS) $(GZSTREAMLIB) $(ZLIB_LIB) $(USER_OBJS) $(NVCC_LIBS)
 
-#specify the dep files depend on the cpp files
+# specify rules for creating the dependency files, which depend on the cpp files
 
+# (this file is only built in the GPGPU variant, using the CUDA compiler, but gets included in the dependency wildcard for all builds so we might generated dependencies with the standard compiler)
 $(OBJCLASS)mscore_kgpu.d: mscore_kgpu.cpp
 	$(XVARIANT_CC) -M $(CXXFLAGS) $< > $@
 	$(XVARIANT_CC) -M $(CXXFLAGS) $< | sed s/\\.o/.d/ > $@
 
-$(OBJCLASS)mscore_kgpu_thrust.d: mscore_kgpu_thrust.cu
-	$(XVARIANT_CC) -M $(CXXFLAGS) $< > $@
-	$(XVARIANT_CC) -M $(CXXFLAGS) $< | sed s/\\.o/.d/ > $@
-
-$(OBJCLASS)%.d: %.cpp
-	$(CXX) -M $(CXXFLAGS) $< > $@
-	$(CXX) -M $(CXXFLAGS) $< | sed s/\\.o/.d/ > $@
-
+# these files are only built in the GPGPU variant, using the CUDA compiler
 $(OBJCLASS)%.d: %.cu
 	$(NVCC) -M $(CXXFLAGS) $< > $@
 	$(NVCC) -M $(CXXFLAGS) $< | sed s/\\.o/.d/ > $@
 
+# this file is only built in the GPGPU variant, using the CUDA compiler
+#$(OBJCLASS)mscore_kgpu_thrust.d: mscore_kgpu_thrust.cu
+#	$(NVCC) -M $(CXXFLAGS) $< > $@
+#	$(NVCC) -M $(CXXFLAGS) $< | sed s/\\.o/.d/ > $@
+
+# all other files use the specified compiler for all builds
+$(OBJCLASS)%.d: %.cpp
+	$(XVARIANT_CC) -M $(CXXFLAGS) $< > $@
+	$(XVARIANT_CC) -M $(CXXFLAGS) $< | sed s/\\.o/.d/ > $@
 
 
+
+
+# specify rules for the object files
 
 $(OBJCLASS)mscore_kgpu.o: mscore_kgpu.cpp
 	$(XVARIANT_CC) $(CXXFLAGS) -c -o $@ $<
 
+# this file is only built in the GPGPU build, using the CUDA compiler
 $(OBJCLASS)mscore_kgpu_thrust.o: mscore_kgpu_thrust.cu
-	$(XVARIANT_CC) $(CXXFLAGS) -c -o $@ $<
+	$(NVCC) $(CXXFLAGS) -c -o $@ $<
 
 
 $(OBJCLASS)%.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c -o $@ $<
+	$(XVARIANT_CC) $(CXXFLAGS) -c -o $@ $<
 
 clean:
 	rm -f $(OBJS) $(EXECUTABLE) $(DEPS) $(SUPPORTFILES)

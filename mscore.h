@@ -1,3 +1,5 @@
+// -*- mode: c++ -*-
+
 /*
  Copyright (C) 2003 Ronald C Beavis, all rights reserved
  X! tandem 
@@ -152,6 +154,9 @@ The End
 #include "msequtilities.h"
 
 class XmlParameter;
+
+class mprocess; // make sure the load_next() declaration understands that mprocess is a class to avoid problems with casts, otherwise.  
+
 
 class mspectrumindex
 {

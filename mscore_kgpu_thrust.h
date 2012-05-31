@@ -108,7 +108,8 @@ void mscore_kgpu_thrust_device_to_host_copy_int(
   const thrust::device_vector<int> &device_src,
   pinned_host_vector_int_t &hhost_dest);
 
-
+// stores mass/intensity pairs in vectors on GPU;
+// mass stored as integer indicies
 struct vmiTypeGPU {
   // purposefully crude, don't want lots of automatic create destroy
   // copy in std::vector
