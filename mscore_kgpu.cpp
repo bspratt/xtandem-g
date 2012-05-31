@@ -256,6 +256,7 @@ bool mscore_kgpu::load_next(const mprocess *_parentProcess) {
 	        m_FakeProcess_bPermuteHigh)	{
                 reset_permute();
                 while(permute())	{
+                    m_cached_mscorestates.push_back(m_State);
                     fakeProcess_create_score(_parentProcess,false);
                 }
             }
@@ -319,6 +320,15 @@ bool mscore_kgpu::fakeProcess_create_score(
 	  m_sequenceCountAfterEachScorePreload.push_back(
 	    m_cached_sequences_index.size());
 	  m_currentSpectra.push_back(&m_vSpectraGPU[m_lId]);    
+
+		if (_parentProcess->m_vSpectra[a].m_hHyper.m_ulCount < 400)     {
+			if(_parentProcess->m_bCrcCheck && _p)   {
+				m_FakeProcess_bPermute = true;
+			}
+			else if(_parentProcess->m_vSpectra[a].m_dMH > 3000.0)     {
+				m_FakeProcess_bPermuteHigh = true;
+			}
+		}
     }
     return true;
 }
