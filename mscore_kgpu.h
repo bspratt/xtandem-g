@@ -1,6 +1,8 @@
 // -*- mode: c++ -*-
 
 /*
+ * Copyright (c) 2012 Insilicos LLC
+ * based on work which is
  * Copyright (c) 2003-2006 Fred Hutchinson Cancer Research Center
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
