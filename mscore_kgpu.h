@@ -98,10 +98,6 @@ protected:
             float fMinMass, float fMaxMass,
             unsigned long lMaxPeaks, long lMaxCharge,
             const char *seq_p, float *fseq_p,unsigned long *lseq_p, 
-            const unsigned long *plCount,
-        	const float *pfScore, // convolute score information,
-				      // indexed using the
-				      // mscore_type_a enum
             unsigned long lType);
         int m_lSeqLength;
         double m_seqMH; 
@@ -113,10 +109,6 @@ protected:
         std::string m_sequence;
         std::vector<float> m_fseq;
         std::vector<long> m_lseq;
-	unsigned long m_plCount[16]; // ion count information, indexed
-				     // using the mscore_type_a enum
-	float m_pfScore[16]; // convolute score information, indexed
-			     // using the mscore_type_a enum
         unsigned long m_lType; // current ion type - value from mscore_type
     };
     std::vector<mscore_internals_cacheinfo *> m_mscore_internals_cache;
@@ -124,8 +116,7 @@ protected:
         m_mscore_internals_cache.
 	  push_back(new mscore_internals_cacheinfo(
 		      m_lSeqLength, m_dSeqMH,m_lId, m_fMinMass, m_fMaxMass, 
-		      m_lMaxPeaks, m_lMaxCharge, m_pSeq, m_pfSeq, m_plSeq, 
-		      m_plCount, m_pfScore, m_lType));
+		      m_lMaxPeaks, m_lMaxCharge, m_pSeq, m_pfSeq, m_plSeq, m_lType));
     }
     void restore_mscore_internals(int n) {
         const mscore_internals_cacheinfo &c=*m_mscore_internals_cache[n];
@@ -146,8 +137,6 @@ protected:
             memmove(m_plSeq,&c.m_lseq[0],sizeof(long)*c.m_lseq.size());
         }
         m_dSeqMH = c.m_seqMH;
-        memmove(m_plCount,c.m_plCount,16*sizeof(long));
-        memmove(m_pfScore,c.m_pfScore,16*sizeof(float));
     }
     std::vector<int> m_cached_sequences_index;
     std::vector<mscorestate> m_cached_mscorestates;

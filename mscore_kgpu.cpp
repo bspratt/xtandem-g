@@ -585,12 +585,9 @@ mscore_kgpu::mscore_internals_cacheinfo::mscore_internals_cacheinfo(
   float fMaxMass,
   unsigned long lMaxPeaks, 
   long lMaxCharge,
-  const char *seq_p, 
+  const char *seq_p,
   float *fseq_p,
   unsigned long *lseq_p, 
-  const unsigned long *plCount,
-  const float *pfScore, // convolute score information, indexed using
-			// the mscore_type_a enum
   unsigned long lType) : 
   m_lSeqLength(sequence_length),m_seqMH(seqMH),
   m_lId(lId), 
@@ -602,6 +599,4 @@ mscore_kgpu::mscore_internals_cacheinfo::mscore_internals_cacheinfo(
   memmove(&m_fseq[0],fseq_p,sizeof(float)*m_fseq.size());
   m_lseq.resize(m_sequence.size());
   memmove(&m_lseq[0],lseq_p,sizeof(unsigned long)*m_lseq.size());
-  memmove(m_plCount,plCount,16*sizeof(long));
-  memmove(m_pfScore,pfScore,16*sizeof(float));
 }
