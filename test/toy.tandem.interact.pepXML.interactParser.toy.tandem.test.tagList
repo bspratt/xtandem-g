@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?xml-stylesheet type="text/xsl" href="http://localhost:1441/ans_proteomic_pipeline/extern/xtandem/xtandem-g/test/toy.tandem.interact.xsl"?>
-<msms_pipeline_analysis date="2012-02-10T22:25:13" summary_xml="c:/sashimi/trunk/trans_proteomic_pipeline/extern/xtandem/xtandem-g/test/toy.tandem.interact.pepXML" xmlns="http://regis-web.systemsbiology.net/pepXML" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://regis-web.systemsbiology.net/pepXML http://localhost/pepXML_v117.xsd">
-<analysis_summary analysis="interact" time="2012-02-10T22:25:13">
+<msms_pipeline_analysis date="2012-06-06T09:50:00" summary_xml="c:/sashimi/trunk/trans_proteomic_pipeline/extern/xtandem/xtandem-g/test/toy.tandem.interact.pepXML" xmlns="http://regis-web.systemsbiology.net/pepXML" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://regis-web.systemsbiology.net/pepXML http://localhost/pepXML_v117.xsd">
+<analysis_summary analysis="interact" time="2012-06-06T09:50:00">
 <interact_summary filename="c:/sashimi/trunk/trans_proteomic_pipeline/extern/xtandem/xtandem-g/test/toy.tandem.interact.pepXML" directory="C:/sashimi/trunk/trans_proteomic_pipeline/extern/xtandem/xtandem-g/test">
 <inputfile name="toy.tandem.pepXML"/>
 </interact_summary>
@@ -49,19 +49,10 @@
 <parameter name="protein, homolog management" value="no"/>
 <parameter name="protein, modified residue mass file" value=""/>
 <parameter name="protein, taxon" value="toydatabase"/>
-<parameter name="refine" value="yes"/>
-<parameter name="refine, cleavage semi" value="yes"/>
+<parameter name="refine" value="no"/>
 <parameter name="refine, maximum valid expectation value" value="0.1"/>
-<parameter name="refine, point mutations" value="no"/>
-<parameter name="refine, potential C-terminus modifications" value=""/>
-<parameter name="refine, potential N-terminus modifications" value=""/>
-<parameter name="refine, potential modification mass" value="15.994915@M"/>
-<parameter name="refine, potential modification motif" value=""/>
 <parameter name="refine, sequence path" value=""/>
 <parameter name="refine, spectrum synthesis" value="yes"/>
-<parameter name="refine, tic percent" value="10"/>
-<parameter name="refine, unanticipated cleavage" value="no"/>
-<parameter name="refine, use potential modifications for full refinement" value="no"/>
 <parameter name="residue, modification mass" value="57.021464@C"/>
 <parameter name="residue, potential modification mass" value="15.994915@M"/>
 <parameter name="residue, potential modification motif" value=""/>
@@ -95,7 +86,16 @@
 <parameter name="spectrum, use conditioning" value="no"/>
 <parameter name="spectrum, use noise suppression" value="yes"/>
 <!-- Unused input parameters -->
+<parameter name="refine, cleavage semi" value="yes"/>
 <parameter name="refine, modification mass" value="57.012@C"/>
+<parameter name="refine, point mutations" value="no"/>
+<parameter name="refine, potential C-terminus modifications" value=""/>
+<parameter name="refine, potential N-terminus modifications" value=""/>
+<parameter name="refine, potential modification mass" value="15.994915@M"/>
+<parameter name="refine, potential modification motif" value=""/>
+<parameter name="refine, tic percent" value="10"/>
+<parameter name="refine, unanticipated cleavage" value="no"/>
+<parameter name="refine, use potential modifications for full refinement" value="no"/>
 <parameter name="scoring, pluggable scoring" value="yes"/>
 <!-- Performance parameters -->
 <parameter name="list path, sequence source #1" value="ipi.toy.fasta"/>
@@ -104,7 +104,7 @@
 <parameter name="modelling, total peptides used" value="44892"/>
 <parameter name="modelling, total proteins used" value="1266"/>
 <parameter name="modelling, total spectra used" value="8"/>
-<parameter name="process, start time" value="2012:02:10:22:25:12"/>
+<parameter name="process, start time" value="2012:06:06:09:49:57"/>
 <parameter name="process, version" value="x! tandem 2010.10.01.1 (LabKey, Insilicos and ISB)"/>
 <parameter name="quality values" value="0 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"/>
 <parameter name="refining, # input models" value="0"/>
@@ -117,7 +117,7 @@
 <parameter name="timing, initial modelling total (sec)" value="1.07"/>
 <parameter name="timing, initial modelling/spectrum (sec)" value="0.134"/>
 <parameter name="timing, load sequence models (sec)" value="0.00"/>
-<parameter name="timing, refinement/spectrum (sec)" value="0.001"/>
+<parameter name="timing, refinement/spectrum (sec)" value="0.000"/>
 </search_summary>
 <spectrum_query spectrum="toy.01329.01329.2" start_scan="1329" end_scan="1329" precursor_neutral_mass="1488.9454" assumed_charge="2" index="1" retention_time_sec="254.771">
 <search_result>

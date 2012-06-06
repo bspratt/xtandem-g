@@ -41,7 +41,7 @@
 	<note type="input" label="scoring, maximum missed cleavage sites">2</note>
 
 <note> REFINEMENT. Do not use unless you know what you are doing. Set "refine" to "yes" and specify what you want to search in the refinement. For non-confusing results, repeat the same modifications you set above for the first-pass here.</note>
-	<note type="input" label="refine">yes</note>
+	<note type="input" label="refine">no</note>
 	<note type="input" label="refine, maximum valid expectation value">0.1</note>
  	<note type="input" label="refine, modification mass">57.012@C</note>
 	<note type="input" label="refine, potential modification mass">15.994915@M</note>
