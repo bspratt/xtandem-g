@@ -63,6 +63,24 @@ thrust::device_vector<float> *mscore_kgpu_thrust_fvec_alloc(int size) {
 }
 
 #define ZEROVEC(f) thrust::fill((f).begin(),(f).end(),0)  // TODO - cudaMemSet?
+#define CLEARVEC(f) (f).resize(0);(f).shrink_to_fit();
+static void clear_largebuffers(); // defined below
+
+template<typename vectT> bool RESIZEVEC(vectT &f,size_t sz,bool recursionOK=true) {
+    try {
+        f.resize(sz);
+    }
+    catch(exception &e) {
+        // fail - try to hose out some larger buffers 
+        if (recursionOK && !largeBufferLockEngaged)
+        {
+            clear_largebuffers();
+            RESIZEVEC(f,sz,false);
+        }
+        return false;
+    }
+    return true;
+}
 
 void mscore_kgpu_thrust_fvec_clear(thrust::device_vector<float> *vec) {
     ZEROVEC(*vec);
@@ -75,16 +93,31 @@ void mscore_kgpu_thrust_ivec_kill(thrust::device_vector<int> *vec) {
     delete vec;
 }
 
+// convert a linear index to a row index
+template <typename T>
+struct linear_index_to_row_index : public thrust::unary_function<T,T>
+{
+    T C; // number of columns
+    
+    __host__ __device__
+    linear_index_to_row_index(T _C) : C(_C) {}
+
+    __host__ __device__
+    T operator()(T i)
+    {
+        return i / C;
+    }
+};
+
 #define MY_CUDA_STREAM 0
 
 thrust::device_vector<int> *mscore_kgpu_thrust_host_to_device_copy(
 			      const pinned_host_vector_int_t &host_src,
 			      thrust::device_vector<int> *device_dest) {
     if (!device_dest) {
-        device_dest = new thrust::device_vector<int>(host_src.size());
-    } else {
-        device_dest->resize(host_src.size());
+        device_dest = new thrust::device_vector<int>();
     }
+    RESIZEVEC(*device_dest,host_src.size());
     cudaMemcpyAsync(thrust::raw_pointer_cast(device_dest->data()),
 		    host_src.data(),
 		    host_src.size()*sizeof(int),
@@ -96,7 +129,7 @@ thrust::device_vector<int> *mscore_kgpu_thrust_host_to_device_copy(
 void mscore_kgpu_thrust_host_to_device_copy_float(
        const pinned_host_vector_float_t &host_src,
        thrust::device_vector<float> &device_dest) {
-    device_dest.resize(host_src.size());
+    RESIZEVEC(device_dest,host_src.size());
     cudaMemcpyAsync(thrust::raw_pointer_cast(device_dest.data()),
 		    host_src.data(),
 		    host_src.size()*sizeof(float),
@@ -107,10 +140,10 @@ void mscore_kgpu_thrust_host_to_device_copy_float(
 void mscore_kgpu_thrust_device_to_host_copy_float(
 	const thrust::device_vector<float> &device_src,
 	pinned_host_vector_float_t &host_dest) {
-    host_dest.resize(device_src.size());
+    RESIZEVEC(host_dest,device_src.size());
     cudaMemcpyAsync(thrust::raw_pointer_cast(host_dest.data()),
 		    thrust::raw_pointer_cast(device_src.data()),
-		    host_dest.size()*sizeof(float),
+		    device_src.size()*sizeof(float),
 		    cudaMemcpyDeviceToHost,
 		    MY_CUDA_STREAM);
 }
@@ -118,10 +151,10 @@ void mscore_kgpu_thrust_device_to_host_copy_float(
 void mscore_kgpu_thrust_device_to_host_copy_int(
 	const thrust::device_vector<int> &device_src,
 	pinned_host_vector_int_t &host_dest) {
-    host_dest.resize(device_src.size());
+    RESIZEVEC(host_dest,device_src.size());
     cudaMemcpyAsync(thrust::raw_pointer_cast(host_dest.data()),
 		    thrust::raw_pointer_cast(device_src.data()),
-		    host_dest.size()*sizeof(int),
+		    device_src.size()*sizeof(int),
 		    cudaMemcpyDeviceToHost,
 		    MY_CUDA_STREAM);
 }
@@ -429,7 +462,7 @@ CUDA_TIMER_START(tScore)
     thrust::copy(fI_scattered.begin(),fI_scattered.end(),sums.begin()+50);
     thrust::exclusive_scan(sums.begin()+50, sums.end(), sums.begin()+50);
     // now sums[i+101]-sums[i] = sum(fI_scattered[i-50:i+50])
-    fI.resize(fI_scattered.size());
+    RESIZEVEC(fI,fI_scattered.size());
     // fI[i] = fI_scattered[i] - (sums[i+101]-sums[i])/101
     thrust::for_each(thrust::make_zip_iterator(
                      thrust::make_tuple(fI.begin(), 
@@ -445,7 +478,7 @@ CUDA_TIMER_START(tScore)
                      mixrange_functor());
 
     // now remove any non-positive results
-    iM.resize(fI.size());
+    RESIZEVEC(iM,fI.size());
     thrust::sequence(iM.begin(),iM.end(),binOffset,1); // shift back
 						       // to host
 						       // coords
@@ -499,19 +532,45 @@ struct dot_functor
 thrust::device_vector<float> ones;
 thrust::device_vector<float> halves;
 thrust::device_vector<float> seq_hits;
-int seq_hits_len=0; // seq_hits is a concatenation of lists each
-		    // seq_hits_len long
+// seq_hits is a concatenation of lists each seq_hits_len long
 thrust::device_vector<float> dScoresDev;
-thrust::device_vector<int> lCountsDev;
 thrust::device_vector<int> lcounts;
-thrust::device_vector<int> lcountsscan;
+thrust::device_vector<int> lCountsDev;
+thrust::device_vector<int> lcountsTmp;
 thrust::device_vector<float> miUsed;
+thrust::device_vector<float> miUsedTmp;
 thrust::device_vector<float> scatteredCopies;
+thrust::device_vector<int> row_indices;
 
-void mscore_kgpu_thrust_init() {
-  ones.resize(MAX_SEQLEN);
+//
+// helps with the problem of large allocs
+// preventing smaller ones - we can break
+// those big ones up if needed
+//
+static bool largeBufferLockEngaged = false;
+class LargeBufferLock {
+    LargeBufferLock() {
+        largeBufferLockEngaged = true;
+    }
+    ~LargeBufferLock() {
+        largeBufferLockEngaged = false;
+    }
+};
+
+static void clear_largebuffers() { 
+    // clear out our larger buffers if possible
+    if (!largeBufferLockEngaged) {
+        CLEARVEC(lcountsTmp);
+        CLEARVEC(seq_hits);
+        CLEARVEC(miUsedTmp);
+        CLEARVEC(scatteredCopies);
+    }
+}
+
+void mscore_kgpu_thrust_init(size_t available_memsize) {
+  RESIZEVEC(ones,MAX_SEQLEN);
   thrust::fill(ones.begin(), ones.end(), 1.0);
-  halves.resize(MAX_SEQLEN);
+  RESIZEVEC(halves,MAX_SEQLEN);
   thrust::fill(halves.begin(), halves.end(), 0.5);
 }
 
@@ -524,223 +583,210 @@ void mscore_kgpu_thrust_dot(pinned_host_vector_int_t &lCountsResult,
     const std::vector<int> &vsequence_index)
 {
 //puts("mscore_kgpu_thrust_dot");
-    cudaStreamSynchronize(MY_CUDA_STREAM); // wait for any preperatory
+    //cudaStreamSynchronize(MY_CUDA_STREAM); // wait for any preperatory
 					   // memcpy to complete
     int lastEnd = 0;
     size_t nSeqTotal = vsequence_index.size()-1;
-    dScoresDev.resize(nSeqTotal);
-    lCountsDev.resize(nSeqTotal);
-    for (int spec=0;
-	 spec<(int)spectra.size();
-	 lastEnd=sequenceCountAfterEachScorePreload[spec++]) {
-        const int *sequence_index = &vsequence_index[lastEnd];
-        int nSeq = (sequenceCountAfterEachScorePreload[spec]-lastEnd);
-        const vmiTypeGPU &spectrum = *spectra[spec];
-        int seq_hits_len = spectrum.iM_max+1; // sequence is trimmed
-					      // to max spectrum mz
-        if ((int)lcounts.size() < seq_hits_len*nSeq) {
-            lcounts.resize((seq_hits_len*nSeq)+1); // need a -1th
-						   // element for sum
-						   // diff later
-            lcountsscan.resize((seq_hits_len*nSeq)+1); // need a -1th
-						       // element for
-						       // sum diff
-						       // later
-            seq_hits.resize(seq_hits_len*nSeq);
-            miUsed.resize((seq_hits_len*nSeq)+1); // need a -1th
-						  // element for sum
-						  // diff later
-            scatteredCopies.resize(seq_hits_len*nSeq);
-        }
+    RESIZEVEC(dScoresDev,nSeqTotal);
+    RESIZEVEC(lCountsDev,nSeqTotal);
+    RESIZEVEC(lcounts,nSeqTotal); 
+    RESIZEVEC(miUsed,nSeqTotal);
+    RESIZEVEC(row_indices,nSeqTotal);
+    int seq_hits_len = 0;
+    for (int sp=(int)spectra.size();sp--;) {
+        seq_hits_len = max(seq_hits_len,spectra[sp]->iM_max+1); 
+    }
+    seq_hits_len = 32*(1+(seq_hits_len/32)); // nice even boundaries
+    int len = seq_hits_len*nSeqTotal;
+    int nSpectraPerChunk = (int)spectra.size();
+    LargeBufferLock lock();
+    if ((int)lcountsTmp.size() < len) {
+//std::cout<<len<<"\n";fflush(stdout);
+      while (!(RESIZEVEC(lcountsTmp,len) && 
+           RESIZEVEC(seq_hits,len) &&
+           RESIZEVEC(miUsedTmp,len) && 
+           RESIZEVEC(scatteredCopies,len)))
+      {
+          // too big for memory, break task into smaller chunks
+          nSpectraPerChunk /= 2;
+          nSpectraPerChunk += (int)(spectra.size()%2); // 999->500+499 instead of 499+499+1
+          int maxSeqPerChunk=0;
+          for (int spec=0;spec<(int)spectra.size();) {
+              // determine worst case memory use
+              int firstSeqInChunk = spec?sequenceCountAfterEachScorePreload[spec-1]:0;
+              int nextspec = min((int)spectra.size(),spec+nSpectraPerChunk);
+              int lastSeqInChunk = sequenceCountAfterEachScorePreload[nextspec-1];
+              maxSeqPerChunk = max(maxSeqPerChunk,lastSeqInChunk-firstSeqInChunk);
+              spec = nextspec;
+          }
+          len = seq_hits_len*maxSeqPerChunk;
+      }
+    }
+
+    // in case of looping, use this to incrementally copy back into overall result space
+    int devOffset = 0; 
+
+    for (int firstSpectraInChunk=0;firstSpectraInChunk<(int)spectra.size();firstSpectraInChunk+=nSpectraPerChunk)
+    {
+        // normally this loop just hits once, but written this way to subdivide
+        // larger than memory items
+
+        int firstSpectraNotInChunk = min((int)spectra.size(),firstSpectraInChunk+nSpectraPerChunk);
         ZEROVEC(seq_hits);
-        // set up the .5 and 1.0 sequence hit multipliers
-        for (int s=0;s<nSeq;s++ ) {
-            int dist = sequence_index[s+1]-sequence_index[s];
-            int seq_hits_offset = s*seq_hits_len;
-            thrust::device_vector<int>::const_iterator seq_begin = 
-	      cached_sequences.begin()+sequence_index[s];
-            
-	    // note the .5 contributions for ions to left and right of actual ions
-            thrust::scatter(
-	      halves.begin(),
-	      halves.begin()+dist,
-	      thrust::make_transform_iterator(seq_begin,
-					      xform_incrementby(-1)),
-	      seq_hits.begin()+seq_hits_offset);
-	    
-            thrust::scatter(
-	      halves.begin(),
-	      halves.begin()+dist,
-	      thrust::make_transform_iterator(seq_begin,
-					      xform_incrementby(1)),
-	      seq_hits.begin()+seq_hits_offset);
-
-            for (int ss=s+1;ss<nSeq;ss++ ) { // and make it an
-					     // underlayment for
-					     // following sequences
-                int seq_hits_offset = ss*seq_hits_len;
-                thrust::scatter(halves.begin(),
-				halves.begin()+dist,
-				thrust::make_transform_iterator(
-				  seq_begin, xform_incrementby(-1)),
-				seq_hits.begin()+seq_hits_offset);
-
-                thrust::scatter(halves.begin(),
-				halves.begin()+dist,
-				thrust::make_transform_iterator(
-				  seq_begin,xform_incrementby(1)),
-				seq_hits.begin()+seq_hits_offset);
-            }
-        }
-        for (int s=0;s<nSeq;s++ ) {
-            int dist = sequence_index[s+1]-sequence_index[s];
-            int seq_hits_offset = s*seq_hits_len;
-            thrust::device_vector<int>::const_iterator seq_begin = 
-	      cached_sequences.begin()+sequence_index[s];
-
-            // note the 1.0 contribution of actual ions
-            thrust::scatter(ones.begin(),
-			    ones.begin()+dist,
-			    seq_begin,
-			    seq_hits.begin()+seq_hits_offset);
-            for (int ss=s+1;ss<nSeq;ss++ ) { // and make it an
-					     // underlayment for
-					     // following sequences
-                int seq_hits_offset = ss*seq_hits_len;
-                thrust::scatter(ones.begin(),
-				ones.begin()+dist,
-				seq_begin,
-				seq_hits.begin()+seq_hits_offset);
-            }
-        }
-        // now lay out a string of spectrum copies so we can do all sequences in one shot
         ZEROVEC(scatteredCopies);
-        for (int s=0;s<nSeq;s++ ) {
-            thrust::scatter(spectrum.fI->begin(),
-			    spectrum.fI->end(),
-			    spectrum.iM->begin(),
-			    scatteredCopies.begin()+(s*seq_hits_len));
-        }
+        ZEROVEC(lcountsTmp);
+        ZEROVEC(miUsedTmp);
 
+        int row = 0;
+        int rowB = 0;
+        for (int spec=firstSpectraInChunk;
+	     spec<firstSpectraNotInChunk;
+	     lastEnd=sequenceCountAfterEachScorePreload[spec++]) {
+             int rowA = row;
+            const int *sequence_index = &vsequence_index[lastEnd];
+            int nSeq = (sequenceCountAfterEachScorePreload[spec]-lastEnd);
+            const vmiTypeGPU &spectrum = *spectra[spec];
+            // set up the .5 and 1.0 sequence hit multipliers
+            for (int s=0;s<nSeq;s++ ) {
+                int dist = sequence_index[s+1]-sequence_index[s];
+                int seq_hits_offset = row++*seq_hits_len;
+                thrust::device_vector<int>::const_iterator seq_begin = 
+	          cached_sequences.begin()+sequence_index[s];
+            
+	        // note the .5 contributions for ions to left and right of actual ions
+                thrust::scatter(
+	          halves.begin(),
+	          halves.begin()+dist,
+	          thrust::make_transform_iterator(seq_begin,
+					          xform_incrementby(-1)),
+	          seq_hits.begin()+seq_hits_offset);
+	    
+                thrust::scatter(
+	          halves.begin(),
+	          halves.begin()+dist,
+	          thrust::make_transform_iterator(seq_begin,
+					          xform_incrementby(1)),
+	          seq_hits.begin()+seq_hits_offset);
 
-        ZEROVEC(lcounts);
-        ZEROVEC(miUsed);
+                for (int ss=s+1;ss<nSeq;ss++ ) { // and make it an
+					         // underlayment for
+					         // following sequences
+                    int seq_hits_offset = (rowA+ss)*seq_hits_len;
+                    thrust::scatter(halves.begin(),
+				    halves.begin()+dist,
+				    thrust::make_transform_iterator(
+				      seq_begin, xform_incrementby(-1)),
+				    seq_hits.begin()+seq_hits_offset);
+
+                    thrust::scatter(halves.begin(),
+				    halves.begin()+dist,
+				    thrust::make_transform_iterator(
+				      seq_begin,xform_incrementby(1)),
+				    seq_hits.begin()+seq_hits_offset);
+                }
+            }
+            for (int s=0;s<nSeq;s++ ) {
+                int dist = sequence_index[s+1]-sequence_index[s];
+                int seq_hits_offset = (rowA+s)*seq_hits_len;
+                thrust::device_vector<int>::const_iterator seq_begin = 
+	          cached_sequences.begin()+sequence_index[s];
+
+                // note the 1.0 contribution of actual ions
+                thrust::scatter(ones.begin(),
+			        ones.begin()+dist,
+			        seq_begin,
+			        seq_hits.begin()+seq_hits_offset);
+                for (int ss=s+1;ss<nSeq;ss++ ) { // and make it an
+					         // underlayment for
+					         // following sequences
+                    int seq_hits_offset = (rowA+ss)*seq_hits_len;
+                    thrust::scatter(ones.begin(),
+				    ones.begin()+dist,
+				    seq_begin,
+				    seq_hits.begin()+seq_hits_offset);
+                }
+            }
+            // now lay out a string of spectrum copies so we can do all sequences in one shot
+            for (int s=0;s<nSeq;s++ ) {
+                thrust::scatter(spectrum.fI->begin(),
+			        spectrum.fI->end(),
+			        spectrum.iM->begin(),
+			        scatteredCopies.begin()+(rowB++*seq_hits_len));
+            }
+        } // end for each spectra
         // now find the hits
         thrust::for_each(
             thrust::make_zip_iterator( 
             thrust::make_tuple(
             scatteredCopies.begin(), 
             seq_hits.begin(), 
-            miUsed.begin()+1, 
-            lcounts.begin()+1)), 
+            miUsedTmp.begin()+1, 
+            lcountsTmp.begin()+1)), 
             thrust::make_zip_iterator(
             thrust::make_tuple(
             scatteredCopies.end(), 
             seq_hits.end(), 
-            miUsed.end(),
-            lcounts.end())), 
+            miUsedTmp.end(),
+            lcountsTmp.end())), 
             dot_functor());
+#ifdef ___DEBUG
+STDVECT(int,lcountsTmpLocal,lcountsTmp);
+printf("lcountsTmpLocal ");for (int nnn=0;nnn<lcountsTmpLocal.size();nnn++)if(lcountsTmpLocal[nnn])printf("%d,%d ",nnn,lcountsTmpLocal[nnn]);printf("\n\n");fflush(stdout);
+#endif
         // and get total score 
-        thrust::inclusive_scan(lcounts.begin(),lcounts.end(),lcountsscan.begin()); // TODO maybe count_if?
-        thrust::for_each(
-            thrust::make_zip_iterator(
-	      thrust::make_tuple(
-		lcounts.begin(),
-		thrust::make_permutation_iterator(
-		  lcountsscan.begin(),
-		  thrust::make_transform_iterator(
-		    thrust::make_counting_iterator(0),
-		    xform_multiplyby(seq_hits_len))
-		  +1),
-		thrust::make_permutation_iterator(
-		  lcountsscan.begin(),
-		  thrust::make_transform_iterator(
-		    thrust::make_counting_iterator(0),
-		    xform_multiplyby(seq_hits_len)))
-	      )
-	    ),
-            thrust::make_zip_iterator(
-	      thrust::make_tuple(
-		lcounts.begin()+nSeq,
-		thrust::make_permutation_iterator(
-		  lcountsscan.begin(),
-		  thrust::make_transform_iterator(
-		    thrust::make_counting_iterator(0),
-		    xform_multiplyby(seq_hits_len)
-		  )
-		  +nSeq+1
-		),
-		thrust::make_permutation_iterator(
-		  lcountsscan.begin(),
-		  thrust::make_transform_iterator(
-		    thrust::make_counting_iterator(0),
-		    xform_multiplyby(seq_hits_len)
-		  )
-		  +nSeq
-		)
-	      )
-	    ),
-            a_equals_b_minus_c()
-	); // end for_each
+        // compute row sums by summing values with equal row indices
+        int firstSeqInChunk = firstSpectraInChunk?sequenceCountAfterEachScorePreload[firstSpectraInChunk-1]:0;
+        int nSeqInChunk = sequenceCountAfterEachScorePreload[firstSpectraNotInChunk-1] - firstSeqInChunk;
+        thrust::reduce_by_key(thrust::make_transform_iterator(thrust::counting_iterator<int>(0), linear_index_to_row_index<int>(seq_hits_len)),
+                              thrust::make_transform_iterator(thrust::counting_iterator<int>(0), linear_index_to_row_index<int>(seq_hits_len)) + (seq_hits_len*(int)nSeqInChunk),
+                              lcountsTmp.begin(),
+                              row_indices.begin(),
+                              lcounts.begin()+firstSeqInChunk,
+                              thrust::equal_to<int>(),
+                              thrust::plus<int>());
+#ifdef ___DEBUG
+STDVECT(int,lcountss,lcounts);
+printf("lcounts ");for (int nnn=0;nnn<lcountss.size();nnn++)printf("%d,%d ",nnn,lcountss[nnn]);printf("\n\n");fflush(stdout);
+#endif
 
-        // lcounts now contains count of 1.0 hits for each seq, but we
-        // want just the increment
-        thrust::adjacent_difference(lcounts.begin(),
-				    lcounts.begin()+nSeq,
-				    lCountsDev.begin()+lastEnd);
+        // now find sum of miUsedTmp for each seq
+        // compute row sums by summing values with equal row indices
+        thrust::reduce_by_key(thrust::make_transform_iterator(thrust::counting_iterator<int>(0), linear_index_to_row_index<int>(seq_hits_len)),
+                             thrust::make_transform_iterator(thrust::counting_iterator<int>(0), linear_index_to_row_index<int>(seq_hits_len)) + (seq_hits_len*(int)nSeqInChunk),
+                             miUsedTmp.begin()+1,
+                             row_indices.begin(),
+                             miUsed.begin()+firstSeqInChunk,
+                             thrust::equal_to<int>(),
+                             thrust::plus<float>());
+#ifdef ___DEBUG
+STDVECT(float,miUsedTmpLocal,miUsed);
+printf("miUsed ");for (int nnn=0;nnn<miUsedTmpLocal.size();nnn++)if(miUsedTmpLocal[nnn])printf("%d,%f ",nnn,miUsedTmpLocal[nnn]);printf("\n\n");fflush(stdout);
+#endif
 
-        // now find sum of miUsed for each seq
-        thrust::inclusive_scan(miUsed.begin()+1,miUsed.end(),miUsed.begin()+1);
-        thrust::for_each(
-            thrust::make_zip_iterator(
-	      thrust::make_tuple(
-		miUsed.begin()+1,
-		thrust::make_permutation_iterator(
-		  miUsed.begin(),
-		  thrust::make_transform_iterator(
-		    thrust::make_counting_iterator(0),
-		    xform_multiplyby(seq_hits_len)
-		  )
-		  +1
-		),
-		thrust::make_permutation_iterator(
-		  miUsed.begin(),
-		  thrust::make_transform_iterator(
-		    thrust::make_counting_iterator(0),
-		    xform_multiplyby(seq_hits_len)
-		  )
-		)
-	      )
-	    ), // end make_zip_iterator
-            thrust::make_zip_iterator(
-	      thrust::make_tuple(
-		miUsed.begin()+1+nSeq,
-		thrust::make_permutation_iterator(
-		  miUsed.begin(),
-		  thrust::make_transform_iterator(
-		    thrust::make_counting_iterator(0),
-		    xform_multiplyby(seq_hits_len))
-		  +
-		  nSeq+1), // end make_permutation_iterator
-		thrust::make_permutation_iterator(
-		  miUsed.begin(),
-		  thrust::make_transform_iterator(
-		    thrust::make_counting_iterator(0),
-		    xform_multiplyby(seq_hits_len))
-		  +
-		  nSeq)
-	      )
-	    ),
-            a_equals_b_minus_c()
-	); // end for_each
-
-        // miUsed[1:n] now contains sum of hits for each seq, but we want just the increment
-        thrust::adjacent_difference(
-	  miUsed.begin()+1,
-	  miUsed.begin()+1+nSeq,
-	  dScoresDev.begin()+lastEnd);
+        // miUsed[0:n] now contains sum of hits for each seq, but we want just the increment
+        // lcounts[0:n] now contains count of 1.0 hits for each seq, but we want just the increment
+        int start=0;
+        for (int specc=firstSpectraInChunk; specc<firstSpectraNotInChunk; specc++) {
+            int end = sequenceCountAfterEachScorePreload[specc] - devOffset;
+            thrust::adjacent_difference(
+                miUsed.begin()+start,
+                miUsed.begin()+end,
+                dScoresDev.begin()+start+devOffset);
+            thrust::adjacent_difference(
+                lcounts.begin()+start,
+			    lcounts.begin()+end,
+			    lCountsDev.begin()+start+devOffset);
+            start = end;
+        }
+        devOffset += start; // in case we're looping
+#ifdef ___DEBUG
+STDVECT(int,scatteredCopiesLocal,lCountsDev);
+printf("lcounts ");for (int nnn=0;nnn<scatteredCopiesLocal.size();nnn++)printf("%d,%d ",nnn,scatteredCopiesLocal[nnn]);printf("\n");fflush(stdout);
+STDVECT(float,dscoreLocal,dScoresDev);
+printf("dscores ");for (int nnn=0;nnn<dscoreLocal.size();nnn++)printf("%d,%f ",nnn,dscoreLocal[nnn]);printf("\n\n");fflush(stdout);
+int blah=0;blah++;
+#endif
     }
-
     // copy back to host memory
     mscore_kgpu_thrust_device_to_host_copy_int(lCountsDev,lCountsResult);
 

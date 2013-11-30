@@ -406,44 +406,45 @@ class mscore : public mplugin
   template<class Archive>
   void serialize(Archive &ar, const unsigned int version)
     {
-	ar & m_fErr; // error for the fragment ions
-	ar & m_fHomoError;
-	ar & m_fHyper; // current hyper score
-	ar & m_fParentErrMinus; // error for the parent ion M+H (not m/z)
-	ar & m_fParentErrPlus; // error for the parent ion M+H (not m/z)
-	ar & m_fMaxMass;
-	ar & m_fMinMass;
-	ar & m_lMaxCharge; // current parent ion charge
-	ar & m_lMaxPeaks; // if > 0, the m_lMaxPeaks most intense peaks will be used
-	ar & m_dScale; // scale for use in hconvert
-    ar & m_seqUtil; // class contains variables and constants for calculating sequence and
+#define SERIALIZE(ar,var) {std::string varname(#var);ar & varname;ar & var;}
+	SERIALIZE(ar, m_fErr); // error for the fragment ions
+	SERIALIZE(ar, m_fHomoError);
+	SERIALIZE(ar, m_fHyper); // current hyper score
+	SERIALIZE(ar, m_fParentErrMinus); // error for the parent ion M+H (not m/z)
+	SERIALIZE(ar, m_fParentErrPlus); // error for the parent ion M+H (not m/z)
+	SERIALIZE(ar, m_fMaxMass);
+	SERIALIZE(ar, m_fMinMass);
+	SERIALIZE(ar, m_lMaxCharge); // current parent ion charge
+	SERIALIZE(ar, m_lMaxPeaks); // if > 0, the m_lMaxPeaks most intense peaks will be used
+	SERIALIZE(ar, m_dScale); // scale for use in hconvert
+    SERIALIZE(ar, m_seqUtil); // class contains variables and constants for calculating sequence and
 						     // fragment masses
-	ar & m_seqUtilAvg; // class contains variables and constants for calculating fragment masses
+	SERIALIZE(ar, m_seqUtilAvg); // class contains variables and constants for calculating fragment masses
 								// based on average atomic masses
-	// omitted ar & m_pSeqUtilFrag; // pointer to the msequtilities object to use for fragment ion masses
-	// omitted ar & m_State; // class stores information about the potential modification state machine
-	// omitted ar & m_Pam; // class stores information about point mutations state machine
- 	// omitted ar & m_Sap; // class stores information about single amino acid polymorphisms state machine
+	// omitted SERIALIZE(ar, m_pSeqUtilFrag); // pointer to the msequtilities object to use for fragment ion masses
+	// omitted SERIALIZE(ar, m_State); // class stores information about the potential modification state machine
+	// omitted SERIALIZE(ar, m_Pam); // class stores information about point mutations state machine
+ 	// omitted SERIALIZE(ar, m_Sap); // class stores information about single amino acid polymorphisms state machine
 
-	// omitted ar & m_Term; // class stores information about potential modification of the N- & C-terminii
-	ar & m_plCount;// ion count information, indexed using the mscore_type_a enum
-	ar & m_pfScore;// convolute score information, indexed using the mscore_type_a enum
+	// omitted SERIALIZE(ar, m_Term); // class stores information about potential modification of the N- & C-terminii
+	SERIALIZE(ar, m_plCount);// ion count information, indexed using the mscore_type_a enum
+	SERIALIZE(ar, m_pfScore);// convolute score information, indexed using the mscore_type_a enum
 
-	ar & m_lType; // current ion type - value from mscore_type
-	ar & m_bUsePam; // true if the peptide will be checked for all possible point mutations
- 	ar & m_bUseSaps; // true if the peptide will be checked for all known single amino acid polymorphisms
-	ar & m_bIsC; // true if the current peptide contains the C-terminus of the protein
-	ar & m_bIsN; // true if the current peptide contains the N-terminus of the protein
-	ar & m_bIsotopeError; // true if the spectrum mass may be associated with the wrong isotopic peak
-	ar & m_lMILength; // current length of the mi vector
-	ar & m_lSeqLength; // current sequence length
+	SERIALIZE(ar, m_lType); // current ion type - value from mscore_type
+	SERIALIZE(ar, m_bUsePam); // true if the peptide will be checked for all possible point mutations
+ 	SERIALIZE(ar, m_bUseSaps); // true if the peptide will be checked for all known single amino acid polymorphisms
+	SERIALIZE(ar, m_bIsC); // true if the current peptide contains the C-terminus of the protein
+	SERIALIZE(ar, m_bIsN); // true if the current peptide contains the N-terminus of the protein
+	SERIALIZE(ar, m_bIsotopeError); // true if the spectrum mass may be associated with the wrong isotopic peak
+	SERIALIZE(ar, m_lMILength); // current length of the mi vector
+	SERIALIZE(ar, m_lSeqLength); // current sequence length
 	unsigned long former_lsize = m_lSize;
-	ar & m_lSize; // maximum sequence length - this can be adjusted on the fly
-	ar & m_lSpectra; // current length of the m_vSpec vector
-	ar & m_lErrorType; // current ion mass accuracy information - value from mscore_error
-	ar & m_fScore; // current convolution score
-	ar & m_dSeqMH; // current sequence M+H - changed from m_fSeqMH to improve accuracy of parent ion mass calculations
-	ar & m_fWidth; // current half-width of the entry for a single fragment ion in the m_vsmapMI map
+	SERIALIZE(ar, m_lSize); // maximum sequence length - this can be adjusted on the fly
+	SERIALIZE(ar, m_lSpectra); // current length of the m_vSpec vector
+	SERIALIZE(ar, m_lErrorType); // current ion mass accuracy information - value from mscore_error
+	SERIALIZE(ar, m_fScore); // current convolution score
+	SERIALIZE(ar, m_dSeqMH); // current sequence M+H - changed from m_fSeqMH to improve accuracy of parent ion mass calculations
+	SERIALIZE(ar, m_fWidth); // current half-width of the entry for a single fragment ion in the m_vsmapMI map
 	                // this value is used by blur
 	if (former_lsize != m_lSize) { // looks like we're loading - initial value is incorrect
 		delete[] m_pfSeq;
@@ -458,14 +459,14 @@ class mscore : public mplugin
 		ar & m_pfSeq[a]; // residue masses corresponding to the current sequence in daltons
 		ar & m_plSeq[a]; // residue masses corresponding to the current sequence, converted into integers
 	}
-	ar & m_lId; // id of the current spectrum
-	ar & m_tSeqPos; // zero-based absolute position of the current peptide in the protein sequence
-	ar & m_lDetails;
-	ar & m_iCharge;
-	ar & m_bMini;
-	ar & m_vSpec; // vector of all spectra being considered
+	SERIALIZE(ar, m_lId); // id of the current spectrum
+	SERIALIZE(ar, m_tSeqPos); // zero-based absolute position of the current peptide in the protein sequence
+	SERIALIZE(ar, m_lDetails);
+	SERIALIZE(ar, m_iCharge);
+	SERIALIZE(ar, m_bMini);
+	SERIALIZE(ar, m_vSpec); // vector of all spectra being considered
 	                        // for all spectra being considered
-	ar & m_vDetails; // vector of mspectrumdetails objects, for looking up parent ion M+H
+	SERIALIZE(ar, m_vDetails); // vector of mspectrumdetails objects, for looking up parent ion M+H
 	                                     // values of mass spectra
 	//  huh, std::set doesn't work
 	int s = (int)m_sIndex.size();
@@ -483,7 +484,7 @@ class mscore : public mplugin
 			ar & itmp;
 		}
 	}
-	ar & m_psPermute;
+	SERIALIZE(ar, m_psPermute);
     }
 #endif
 public:

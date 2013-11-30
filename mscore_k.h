@@ -113,10 +113,10 @@ class mscore_k : public mscore
   void serialize(Archive &ar, const unsigned int version)
     {
       ar & boost::serialization::base_object<mscore>(*this);
-      ar & m_maxEnd;
-      ar & m_miUsed;
-      ar & m_vmiType;
-      ar & m_dIsotopeCorrection;
+      SERIALIZE(ar, m_maxEnd);
+      SERIALIZE(ar, m_miUsed);
+      SERIALIZE(ar, m_vmiType);
+      SERIALIZE(ar, m_dIsotopeCorrection);
     }
 #endif // HAVE_MULTINODE_TANDEM
 protected:

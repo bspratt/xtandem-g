@@ -27,18 +27,24 @@
 #include <cuda.h>
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
+#if THRUST_VERSION >= 100600
+#include <thrust/system/cuda/experimental/pinned_allocator.h> 
+#define pinned_allocator_t thrust::system::cuda::experimental::pinned_allocator
+#else
 #include <thrust/experimental/cuda/pinned_allocator.h> 
+#define pinned_allocator_t thrust::experimental::cuda::pinned_allocator
+#endif
 
 #include "mspectrum.h"
 
 typedef thrust::host_vector<
     float,
-    thrust::experimental::cuda::pinned_allocator<float> 
+    pinned_allocator_t<float> 
   > pinned_host_vector_float_t;
 
 typedef thrust::host_vector<
     int,
-    thrust::experimental::cuda::pinned_allocator<int> 
+    pinned_allocator_t<int> 
   > pinned_host_vector_int_t;
 
 
@@ -88,7 +94,7 @@ class cudatimer {
 #define STDVECT(T,local,mem) 
 #endif
 
-void mscore_kgpu_thrust_init(); // call once at start
+void mscore_kgpu_thrust_init(size_t available_memsize); // call once at start
 
 // helpers for hiding device memory implementation from normal C++
 thrust::device_vector<float> *mscore_kgpu_thrust_fvec_alloc(int size);

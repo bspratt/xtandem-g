@@ -37,7 +37,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 4.1.props" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 4.2.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -113,6 +113,7 @@ copy "$(SolutionDir)..\extern\xtandem\bin\tandem-style.xsl" "$(OutDir)"
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>4996;4244;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <TreatWarningAsError>false</TreatWarningAsError>
+      <Optimization>MaxSpeed</Optimization>
     </ClCompile>
     <Link>
       <OutputFile>$(OutDir)xtandem-g.exe</OutputFile>
@@ -141,6 +142,9 @@ copy "$(SolutionDir)..\extern\xtandem\bin\tandem-style.xsl" "$(OutDir)"
       <Include>$(SolutionDir)..\extern\zlib125-dll;$(SolutionDir)..\extern\gzstream;$(SolutionDir)..\extern\boost_1_45_0;$(SolutionDir)..\extern\ProteoWizard\pwiz;$(SolutionDir)Parsers/ramp;$(CUDA_PATH)/include;%(AdditionalIncludeDirectories);%(Include)</Include>
       <Runtime>MT</Runtime>
       <Keep>true</Keep>
+      <GPUDebugInfo>true</GPUDebugInfo>
+      <HostDebugInfo>true</HostDebugInfo>
+      <Optimization>Od</Optimization>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'">
@@ -307,6 +311,6 @@ copy "$(SolutionDir)..\extern\xtandem\bin\tandem-style.xsl" "$(OutDir)"
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 4.1.targets" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 4.2.targets" />
   </ImportGroup>
 </Project>

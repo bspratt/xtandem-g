@@ -25,7 +25,6 @@
 
 // using CUDA Thrust template lib
 #include "mscore_kgpu_thrust.h"
-#include <thrust/experimental/cuda/pinned_allocator.h> 
 
 // Factory instance, registers itself with the mscoremanager.
 static mscorefactory_kgpu factory;
@@ -110,7 +109,7 @@ mplugin* mscorefactory_kgpu::create_plugin()
                 logevent(
 		  error, 
 		  init, 
-		  "unable to access GPU properites, using non-GPU k-score" 
+		  "unable to access GPU properties, using non-GPU k-score" 
 		    << endl);
 
                 return new mscore_k();
@@ -172,14 +171,14 @@ mplugin* mscorefactory_kgpu::create_plugin()
         size_t free, total;
         free = total = 0;
         cudaMemGetInfo(&free, &total);
-        m_initialFreeMemory = total;
+        m_initialFreeMemory = free;
         logevent(
 	  info, 
 	  init, 
 	  "Device memory: " << prettymem(free) << " free / " 
-	    << prettymem(m_initialFreeMemory) << " total" << endl);
+	    << prettymem(total) << " total" << endl);
         if (m_initialFreeMemory) {
-            mscore_kgpu_thrust_init();
+            mscore_kgpu_thrust_init(m_initialFreeMemory);
         }
 
     }
@@ -288,7 +287,7 @@ bool mscore_kgpu::load_next(const mprocess *_parentProcess) {
 // lookahead purposes
 bool mscore_kgpu::fakeProcess_create_score(
   const mprocess *_parentProcess,
-  bool _p) {
+      bool _p) {
 	size_t a = 0;
 	long lCount = 0;
 /*
@@ -354,6 +353,9 @@ void mscore_kgpu::prescore(const size_t _i)
     mscore_k::prescore(_i);
 }
 
+#include <boost/archive/text_oarchive.hpp>
+#include <sstream>
+std::vector<std::string> ser;
 bool mscore_kgpu::load_seq(const unsigned long _t,const long _c) {
     bool ret;
     if (m_preloading) {
@@ -571,8 +573,8 @@ double mscore_kgpu::dot(unsigned long *_v)
       STDVECT(unsigned long,foov,m_lCounts) ;
       STDVECT(float,food,m_dScores) ;
       *_v = (unsigned long)m_lCounts[m_current_playback_sequence];
-      CUDA_TIMER_STOP(tDotKGPU);
-      return m_dScores[m_current_playback_sequence];
+CUDA_TIMER_STOP(tDotKGPU)
+    return m_dScores[m_current_playback_sequence];
     }
 }
 
